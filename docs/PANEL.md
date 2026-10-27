@@ -15,8 +15,9 @@ and Persian (the toggle is in the header; Persian switches the layout to RTL).
 * Session: HMAC-signed cookie `axpi`, 12 hours, `HttpOnly`, `SameSite=Lax`.
 * Scripts: `X-Auth-Token: <api_token>` from `/etc/airxpi/panel.json` (constant-time
   compare). Loopback requests are trusted so the HDMI UI needs no credentials.
-* A failed login sleeps 0.6 s to slow down brute force. The panel is LAN-only by default; `panel.wan_access = true` in
-  `/etc/airxpi/airxpi.json` lets `axnetd` serve it on the uplink interface as well.
+* A failed login sleeps 0.6 s to slow down brute force. The panel is served on the LAN *and* on the uplink interface by default
+(`panel.wan_access = true`); set it to `false` in `/etc/airxpi/airxpi.json`
+to restrict it to `br0` only.
 
 ## Screens
 

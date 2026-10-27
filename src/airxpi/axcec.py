@@ -77,6 +77,7 @@ def main():
         return 0
 
     seen = set()
+    failures = 0
     while True:
         c.log("starting %s" % detail, tag="axcec")
         try:
@@ -108,8 +109,12 @@ def main():
                 c.log("key %s -> %s" % (name, key), tag="axcec")
 
         rc = process.wait()
+        failures = failures + 1 if rc else 0
+        if failures > 8:
+            c.log("cec-client keeps failing, giving up", tag="axcec")
+            return 1
         c.log("cec-client exited (%s), restarting" % rc, tag="axcec")
-        time.sleep(3)
+        time.sleep(10 if rc else 3)
 
 
 if __name__ == "__main__":

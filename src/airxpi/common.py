@@ -66,7 +66,7 @@ DEFAULTS = {
         "name": "AirXPi",
     },
     "panel": {
-        "wan_access": False,
+        "wan_access": True,
     },
 }
 

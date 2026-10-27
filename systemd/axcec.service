@@ -11,8 +11,8 @@ Environment=PYTHONUNBUFFERED=1
 RuntimeDirectory=airxpi
 RuntimeDirectoryMode=0755
 ExecStart=/usr/bin/python3 -m airxpi.axcec
-Restart=always
-RestartSec=5
+Restart=on-failure
+RestartSec=20
 
 [Install]
 WantedBy=multi-user.target
