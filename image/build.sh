@@ -41,6 +41,8 @@ prepare() {
 # -- airxpi: keep the Debian archive keyring inside the rootfs
 mkdir -p "${ROOTFS_DIR}/usr/share/keyrings" "${ROOTFS_DIR}/etc/apt/trusted.gpg.d"
 install -m 644 /usr/share/keyrings/debian-archive-keyring.gpg "${ROOTFS_DIR}/usr/share/keyrings/debian-archive-keyring.gpg"
+# debian.sources in this pi-gen release points at the .pgp name
+install -m 644 /usr/share/keyrings/debian-archive-keyring.gpg "${ROOTFS_DIR}/usr/share/keyrings/debian-archive-keyring.pgp"
 cp -f /etc/apt/trusted.gpg.d/debian-archive-*.asc "${ROOTFS_DIR}/etc/apt/trusted.gpg.d/" 2>/dev/null || true
 ls -l "${ROOTFS_DIR}/usr/share/keyrings/debian-archive-keyring.gpg" >&2
 
