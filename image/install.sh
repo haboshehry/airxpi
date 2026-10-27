@@ -87,10 +87,21 @@ airplay2_ready() {
     shairport-sync -V 2>/dev/null | grep -qi 'airplay2'
 }
 
+fetch_source() {
+    # tarballs instead of `git clone`: inside the pi-gen chroot git cannot always
+    # create its pack files, and curl/tar are already required by the image
+    url=$1
+    dest=$2
+    mkdir -p "$dest"
+    curl -fsSL --retry 3 --retry-delay 2 -o "$dest/../src.tgz" "$url" || return 1
+    tar -xzf "$dest/../src.tgz" -C "$dest" --strip-components=1
+    rm -f "$dest/../src.tgz"
+}
+
 build_nqptp() {
     say "building nqptp"
     tmp=$(mktemp -d)
-    git clone --depth 1 https://github.com/mikebrady/nqptp.git "$tmp/nqptp"
+    fetch_source https://github.com/mikebrady/nqptp/archive/refs/heads/master.tar.gz "$tmp/nqptp"
     cd "$tmp/nqptp"
     autoreconf -fi >/dev/null 2>&1
     ./configure --with-systemd-startup >/dev/null
@@ -104,9 +115,8 @@ build_nqptp() {
 build_shairport() {
     say "building shairport-sync ${SHAIRPORT_VERSION} (AirPlay 2)"
     tmp=$(mktemp -d)
-    git clone --depth 1 --branch "$SHAIRPORT_VERSION" \
-        https://github.com/mikebrady/shairport-sync.git "$tmp/ss" 2>/dev/null \
-        || git clone --depth 1 https://github.com/mikebrady/shairport-sync.git "$tmp/ss"
+    fetch_source "https://github.com/mikebrady/shairport-sync/archive/refs/tags/$SHAIRPORT_VERSION.tar.gz" "$tmp/ss" \
+        || fetch_source https://github.com/mikebrady/shairport-sync/archive/refs/heads/master.tar.gz "$tmp/ss"
     cd "$tmp/ss"
     autoreconf -fi >/dev/null 2>&1
     ./configure --sysconfdir=/etc \
