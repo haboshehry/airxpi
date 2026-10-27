@@ -1,7 +1,7 @@
 [Unit]
 Description=vpnexit supervisor (tunnel watchdog and daily feed refresh)
-After=network-online.target strongswan-swanctl.service
-Wants=network-online.target
+After=network-online.target strongswan-starter.service
+Wants=network-online.target strongswan-starter.service
 
 [Service]
 Type=simple

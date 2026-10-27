@@ -1,7 +1,7 @@
 [Unit]
 Description=vpnexit API (VPN exit switcher, localhost only)
-After=network-online.target strongswan-swanctl.service
-Wants=network-online.target
+After=network-online.target strongswan-starter.service
+Wants=network-online.target strongswan-starter.service
 
 [Service]
 Type=simple

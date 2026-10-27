@@ -210,7 +210,10 @@ def services_health():
     result = {}
     for unit in units:
         rc, out = c.run(["systemctl", "is-active", unit], timeout=5)
-        result[unit] = out.strip()
+        state = (out.strip().splitlines() or ["unknown"])[0].strip()
+        if not state or "systemd" in state or "Failed to connect" in state:
+            state = "unknown"
+        result[unit] = state
     return result
 
 
@@ -350,31 +353,31 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(401, {"ok": False, "error": "unauthorized"})
 
         if path == "/api/airplay/config":
-            return self._send(200, airplay_call("config", body, 45))
+            return self._engine(airplay_call("config", body, 45))
         if path == "/api/airplay/volume":
-            return self._send(200, airplay_call("volume", body, 15))
+            return self._engine(airplay_call("volume", body, 15))
         if path == "/api/airplay/action":
-            return self._send(200, airplay_call("action", body, 90))
+            return self._engine(airplay_call("action", body, 90))
         if path == "/api/vpn/connect":
-            return self._send(200, vpn_call("connect", body, 60))
+            return self._engine(vpn_call("connect", body, 60))
         if path == "/api/vpn/disconnect":
-            return self._send(200, vpn_call("disconnect", body, 60))
+            return self._engine(vpn_call("disconnect", body, 60))
         if path == "/api/vpn/refresh":
-            return self._send(200, vpn_call("refresh", {}, 90))
+            return self._engine(vpn_call("refresh", {}, 90))
         if path == "/api/vpn/selftest":
-            return self._send(200, vpn_call("selftest", {}, 60))
+            return self._engine(vpn_call("selftest", {}, 60))
         if path == "/api/net/wifi":
-            return self._send(200, net_call("wifi", body))
+            return self._engine(net_call("wifi", body))
         if path == "/api/net/wan":
-            return self._send(200, net_call("wan", body))
+            return self._engine(net_call("wan", body))
         if path == "/api/net/lan":
-            return self._send(200, net_call("lan", body))
+            return self._engine(net_call("lan", body))
         if path == "/api/net/device":
             result = net_call("device", body)
             if body.get("language") in ("en", "fa"):
                 config["language"] = body["language"]
                 c.save_json(c.PANEL_CONF, config, 0o600)
-            return self._send(200, result)
+            return self._engine(result)
         if path == "/api/system/password":
             return self._send(200, set_password(str(body.get("password") or "")))
         if path == "/api/system/reboot":
@@ -400,6 +403,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(500, {"error": "read failed"})
         cache = "no-store" if path.endswith(".html") else "public, max-age=300"
         return self._send(200, data, ctype, cache=cache)
+
+    def _engine(self, result):
+        """Pass an engine answer through, but not with a 200 when it is gone."""
+        code = 200
+        if isinstance(result, dict) and result.get("ok") is False:
+            error = str(result.get("error") or "")
+            code = 502 if (error.startswith("unreachable") or "timed out" in error) else 400
+        return self._send(code, result)
 
     def _proxy_artwork(self):
         url = "http://127.0.0.1:%d/api/artwork" % c.AIRPLAY_PORT

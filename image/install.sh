@@ -304,6 +304,20 @@ systemctl disable --now dnsmasq.service >/dev/null 2>&1 || true
 systemctl mask systemd-resolved.service >/dev/null 2>&1 || true
 systemctl disable --now NetworkManager.service >/dev/null 2>&1 || true
 systemctl mask NetworkManager.service >/dev/null 2>&1 || true
+# strongSwan ships different unit names across releases
+enable_any() {
+    for unit in "$@"; do
+        for dir in /etc/systemd/system /lib/systemd/system /usr/lib/systemd/system; do
+            if [ -f "$dir/$unit" ]; then
+                enable_unit "$unit"
+                return 0
+            fi
+        done
+    done
+    warn "no systemd unit found for: $*"
+    return 0
+}
+
 enable_unit dhcpcd.service
 enable_unit avahi-daemon.service
 for unit in axnet.service axpanel.service axplay.service axgui.service \
@@ -312,13 +326,13 @@ for unit in axnet.service axpanel.service axplay.service axgui.service \
 done
 systemctl set-default multi-user.target >/dev/null 2>&1 || ln -sf /lib/systemd/system/multi-user.target /etc/systemd/system/default.target
 enable_unit nqptp.service
-enable_unit strongswan-swanctl.service
+enable_any strongswan-starter.service strongswan-swanctl.service
 
 if [ "$IMAGE_MODE" = "0" ]; then
     systemctl daemon-reload
     systemctl restart systemd-sysctl.service >/dev/null 2>&1 || true
     systemctl start nqptp.service >/dev/null 2>&1 || true
-    systemctl start strongswan-swanctl.service >/dev/null 2>&1 || true
+    systemctl start strongswan-starter.service >/dev/null 2>&1 || true
     systemctl restart axnet.service >/dev/null 2>&1 || true
     sleep 3
     systemctl restart axplay.service >/dev/null 2>&1 || true
