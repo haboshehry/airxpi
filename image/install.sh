@@ -352,9 +352,13 @@ if [ -f "$MARKER" ] && [ -f "$CONFDIR/panel.json" ]; then
 else
     PASSWORD="${AIRXPI_PASSWORD:-admin}"
     /usr/bin/python3 - "$PASSWORD" <<'PY'
+import json
 import sys
 from airxpi import axpanel
-axpanel.set_password(sys.argv[1])
+
+result = axpanel.set_password(sys.argv[1])
+print("    stored panel credentials:", json.dumps(result))
+sys.exit(0 if result.get("ok") else 1)
 PY
     mkdir -p /boot/firmware 2>/dev/null || true
     {

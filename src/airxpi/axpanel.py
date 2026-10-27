@@ -104,9 +104,15 @@ def token_valid(secret, token):
         return False
 
 
+# The shipped default is the short "admin" the appliance is documented with, so
+# the floor only rejects obviously empty/typo passwords; axp-passwd and the panel
+# warn separately when the default is still in use.
+MIN_PASSWORD_LEN = 5
+
+
 def set_password(password):
-    if len(password or "") < 8:
-        return {"ok": False, "error": "password must be at least 8 characters"}
+    if len(password or "") < MIN_PASSWORD_LEN:
+        return {"ok": False, "error": "password must be at least %d characters" % MIN_PASSWORD_LEN}
     data = panel_config()
     data["password_hash"] = _hash(password)
     data["default_password"] = False
