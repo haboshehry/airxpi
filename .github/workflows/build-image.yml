@@ -1,15 +1,14 @@
 name: build-image
 
 # Builds the flashable AirXPi image (Raspberry Pi 3B, arm64 Bookworm).
-# Artifacts are kept for 30 days; tagged builds publish a release.
+#
+# Runs on a *native* arm64 GitHub runner, so pi-gen needs no qemu/binfmt
+# emulation: the build is roughly three times faster and cannot break the host
+# kernel's binary handlers. Artifacts are kept for 30 days; tagged builds
+# publish a release.
 
 on:
   workflow_dispatch:
-    inputs:
-      release:
-        description: "Upload the image as a release asset"
-        type: boolean
-        default: false
   push:
     tags:
       - "v*"
@@ -19,26 +18,34 @@ permissions:
 
 jobs:
   image:
-    name: pi-gen image
-    runs-on: ubuntu-24.04
+    name: pi-gen image (arm64)
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
 
       - name: Free disk space
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost
           sudo apt-get clean
           df -h /
 
-      - name: Install tools
+      - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-user-static rsync
-          sudo docker run --privileged --rm tonistiigi/binfmt --install arm64
+          sudo apt-get install -y git rsync quilt parted debootstrap zerofree \
+                                  zip dosfstools libarchive-tools libcap2-bin \
+                                  xz-utils file curl bc arch-test pigz xxd
+
+      - name: Check the toolchain
+        run: |
+          uname -m
+          arch-test -n arm64 && echo "native arm64 builds are supported"
+          docker version --format '{{.Server.Version}}' || true
 
       - name: Build image
-        run: sudo -E ./image/build-in-docker.sh
+        run: sudo -E ./image/build.sh
 
       - name: List artefacts
         run: ls -lh dist/
@@ -49,6 +56,7 @@ jobs:
           path: |
             dist/*.zip
             dist/*.img.xz
+            dist/*.info
           retention-days: 30
           if-no-files-found: error
 
