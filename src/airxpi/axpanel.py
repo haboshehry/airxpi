@@ -115,7 +115,8 @@ def set_password(password):
         return {"ok": False, "error": "password must be at least %d characters" % MIN_PASSWORD_LEN}
     data = panel_config()
     data["password_hash"] = _hash(password)
-    data["default_password"] = False
+    # the installer stores the shipped default too, so the UI keeps warning
+    data["default_password"] = password == DEFAULT_PASSWORD
     c.save_json(c.PANEL_CONF, data, 0o600)
     return {"ok": True}
 
