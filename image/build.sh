@@ -76,6 +76,14 @@ KEYRING
         echo "==> made the rpi-resize enable non-fatal"
     fi
 
+    # cloud-init is not part of the appliance: it adds a slow, networked first
+    # boot, and its Raspberry Pi glue package (rpi-cloud-init-mods) does not exist
+    # in the arm64 bookworm repository. axnetd owns the network instead.
+    if [ -d "$PIGEN/stage2/04-cloud-init" ]; then
+        touch "$PIGEN/stage2/04-cloud-init/SKIP"
+        echo "==> cloud-init stage skipped"
+    fi
+
     # only the last stage exports an image
     for stage in stage0 stage1 stage2; do
         rm -f "$PIGEN/$stage/EXPORT_IMAGE" "$PIGEN/$stage/EXPORT_NOOBS"
