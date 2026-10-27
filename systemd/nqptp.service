@@ -1,0 +1,15 @@
+[Unit]
+Description=nqptp - Not Quite PTP daemon (AirPlay 2 timing)
+Documentation=https://github.com/mikebrady/nqptp
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/nqptp
+Restart=always
+RestartSec=2
+CapabilityBoundingSet=CAP_SYS_NICE
+AmbientCapabilities=CAP_SYS_NICE
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,51 @@
+#!/bin/sh
+# axp-doctor - one screen of "why is it not working" for the AirXPi appliance.
+set -u
+
+line() { printf '\n== %s\n' "$1"; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+line "system"
+printf 'model   : %s\n' "$([ -r /proc/device-tree/model ] && tr -d '\0' < /proc/device-tree/model || echo unknown)"
+printf 'kernel  : %s\n' "$(uname -r)"
+printf 'uptime  : %s\n' "$(cut -d. -f1 /proc/uptime) s"
+printf 'temp    : %s C\n' "$(awk '{printf "%.1f", $1/1000}' /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo n/a)"
+
+line "services"
+for unit in axnet axpanel axplay axgui vpnexit-web vpnexit-supervisor hostapd dnsmasq avahi-daemon nqptp; do
+    printf '%-20s %s\n' "$unit" "$(systemctl is-active "$unit" 2>/dev/null || true)"
+done
+
+line "audio"
+if have aplay; then
+    aplay -l 2>/dev/null || echo "no playback devices"
+else
+    echo "alsa-utils missing"
+fi
+printf 'selected: %s\n' "$(axp-audio show 2>/dev/null || echo unknown)"
+
+line "interfaces"
+ip -br -4 addr 2>/dev/null || ip -4 addr
+
+line "uplink"
+printf 'default route: %s\n' "$(ip -4 route show default | head -n1)"
+printf 'hostapd       : %s\n' "$(systemctl is-active hostapd 2>/dev/null)"
+printf 'stations      : %s\n' "$(iw dev wlan0 station dump 2>/dev/null | grep -c '^Station' || echo 0)"
+
+line "vpn"
+/usr/local/sbin/vpnexit status 2>/dev/null | head -c 1200 || echo "vpnexit not installed"
+printf '\n'
+
+line "airplay"
+curl -fsS --max-time 5 http://127.0.0.1:8090/api/state 2>/dev/null \
+    | python3 -c 'import json,sys
+s=json.load(sys.stdin)
+print("server   :", s["server"]["running"], "pid", s["server"].get("pid"))
+print("device   :", s["config"].get("device"))
+print("state    :", s["now_playing"].get("state"))
+print("track    :", s["now_playing"].get("title") or "-")
+print("displays :", ", ".join(s.get("displays") or []) or "none")
+print("meta     :", s.get("metadata_state"))' 2>/dev/null || echo "panel not answering on :8090"
+
+line "recent errors"
+journalctl -u axnet -u axpanel -u axplay -u axgui -b -p warning --no-pager 2>/dev/null | tail -n 15

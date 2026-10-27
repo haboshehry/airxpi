@@ -1,0 +1,72 @@
+#!/bin/sh
+# axp-audio - list and select the AirPlay output on the Pi.
+#
+#   axp-audio list          every playback PCM, HDMI ones marked
+#   axp-audio show          the device the receiver is using
+#   axp-audio hdmi          select the first HDMI PCM and route the mixer to HDMI
+#   axp-audio set DEVICE    select an explicit ALSA device (plughw:CARD=...,DEV=...)
+#   axp-audio test [DEV]    play a 2 s test tone
+set -eu
+
+STATE=/data/config.json
+
+hdmi_device() {
+    aplay -l 2>/dev/null | awk '
+        /^card / {
+            card=""; dev=""; name=""
+            for (i = 1; i <= NF; i++) {
+                if ($i == "card") card = $(i + 1)
+                if ($i == "device") dev = $(i + 1)
+            }
+            line = $0
+            sub(/^card [0-9]+: /, "", line)
+            sub(/, device [0-9]+:.*/, "", line)
+            if (tolower(line) ~ /hdmi|vc4/) {
+                gsub(/:$/, "", card)
+                gsub(/:$/, "", dev)
+                print "plughw:CARD=" card ",DEV=" dev
+                exit
+            }
+        }'
+}
+
+case "${1:-list}" in
+    list)
+        printf '%-8s %-26s %s\n' CARD DEVICE NAME
+        aplay -l 2>/dev/null | sed -n 's/^card \([0-9]*\): \([^(]*\).*/card \1 \2/p'
+        echo
+        echo "HDMI candidate: $(hdmi_device || true)"
+        ;;
+    show)
+        if [ -f "$STATE" ]; then
+            python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("device",""))' "$STATE"
+        fi
+        ;;
+    hdmi)
+        dev=$(hdmi_device || true)
+        [ -n "$dev" ] || { echo "no HDMI PCM found - is a display connected?" >&2; exit 1; }
+        # bcm2835 exposes the analogue/HDMI route as a mixer control
+        amixer -c 0 cset numid=3 2 >/dev/null 2>&1 || true
+        amixer -c 0 sset 'PCM Playback Route' 2 >/dev/null 2>&1 || true
+        echo "$dev"
+        ;;
+    set)
+        [ $# -ge 2 ] || { echo "usage: axp-audio set plughw:CARD=vc4hdmi,DEV=0" >&2; exit 1; }
+        curl -fsS -X POST http://127.0.0.1:8090/api/config \
+            -H 'Content-Type: application/json' \
+            -d "{\"device\":\"$2\",\"force\":true}" >/dev/null
+        echo "output set to $2"
+        ;;
+    test)
+        dev="${2:-$(hdmi_device || true)}"
+        [ -n "$dev" ] || exit 1
+        curl -fsS -X POST http://127.0.0.1:8090/api/action \
+            -H 'Content-Type: application/json' \
+            -d "{\"action\":\"test-device\",\"device\":\"$dev\"}"
+        echo
+        ;;
+    *)
+        sed -n '2,8p' "$0"
+        exit 1
+        ;;
+esac

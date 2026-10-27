@@ -1,0 +1,34 @@
+#!/bin/sh
+# axp-passwd - set or regenerate the panel password.
+#
+#   axp-passwd                generate a new random password and print it
+#   axp-passwd 'my password'  set an explicit password (min 8 characters)
+set -eu
+
+[ "$(id -u)" = "0" ] || { echo "run as root" >&2; exit 1; }
+export PYTHONPATH=/opt/airxpi/lib
+
+exec /usr/bin/python3 - "$@" <<'PY'
+import secrets
+import sys
+
+from airxpi import axpanel, common
+
+password = sys.argv[1] if len(sys.argv) > 1 else secrets.token_urlsafe(8)
+result = axpanel.set_password(password)
+if not result.get("ok"):
+    sys.stderr.write("error: %s\n" % result.get("error"))
+    raise SystemExit(1)
+
+url = "http://%s/" % (common.ip_of("br0") or "10.42.0.1")
+print("panel password: %s" % password)
+print("panel url     : %s" % url)
+
+# keep the boot-partition note in step so a headless install can always get in
+try:
+    with open("/boot/firmware/AIRXPI.txt", "w") as fh:
+        fh.write("AirXPi appliance\n\npanel   : %s\npassword: %s\n\n"
+                 "Change it in the panel: System -> Panel password\n" % (url, password))
+except OSError:
+    pass
+PY

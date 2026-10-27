@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
+<title>AirXPi</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="/favicon.ico">
+</head>
+<body>
+
+<div id="login" class="login hidden">
+  <form class="login-card" id="login-form" autocomplete="current-password">
+    <div class="brand">
+      <span class="brand-mark">A</span>
+      <div>
+        <h1>AirXPi</h1>
+        <p class="muted" data-i18n="login.sub">AirPlay 2 receiver &amp; VPN exit</p>
+      </div>
+    </div>
+    <label class="field">
+      <span data-i18n="login.password">Panel password</span>
+      <input type="password" id="login-password" name="password" required autofocus>
+    </label>
+    <p class="error hidden" id="login-error"></p>
+    <button class="btn primary block" type="submit" data-i18n="login.submit">Sign in</button>
+    <p class="hint" data-i18n="login.hint">The password is printed on the boot partition (AIRXPI.txt) and in the console banner.</p>
+  </form>
+</div>
+
+<header class="topbar hidden" id="topbar">
+  <div class="topbar-left">
+    <span class="brand-mark small">A</span>
+    <strong id="device-name">AirXPi</strong>
+  </div>
+  <div class="chips">
+    <span class="chip" id="chip-airplay"><i class="dot"></i><span data-i18n="chip.airplay">AirPlay</span></span>
+    <span class="chip" id="chip-vpn"><i class="dot"></i><span id="chip-vpn-text">VPN</span></span>
+    <span class="chip" id="chip-wifi"><i class="dot"></i><span id="chip-wifi-text">Wi-Fi</span></span>
+    <span class="chip" id="chip-wan"><i class="dot"></i><span id="chip-wan-text">WAN</span></span>
+  </div>
+  <div class="topbar-right">
+    <button class="btn ghost small" id="lang-toggle" title="English / فارسی">فا</button>
+    <button class="btn ghost small" id="logout" data-i18n="common.logout">Log out</button>
+  </div>
+</header>
+
+<nav class="tabs hidden" id="tabs">
+  <button class="tab active" data-tab="dashboard" data-i18n="tab.dashboard">Dashboard</button>
+  <button class="tab" data-tab="airplay" data-i18n="tab.airplay">AirPlay</button>
+  <button class="tab" data-tab="vpn" data-i18n="tab.vpn">VPN</button>
+  <button class="tab" data-tab="wifi" data-i18n="tab.wifi">Wi-Fi</button>
+  <button class="tab" data-tab="network" data-i18n="tab.network">Network</button>
+  <button class="tab" data-tab="system" data-i18n="tab.system">System</button>
+</nav>
+
+<main class="hidden" id="main">
+
+  <!-- ---------------------------------------------------------- dashboard -->
+  <section class="panel-view active" data-view="dashboard">
+    <div class="hero card">
+      <div class="art-wrap">
+        <img id="art" alt="" class="art">
+      </div>
+      <div class="hero-body">
+        <p class="eyebrow" id="np-state" data-i18n="np.idle">Nothing playing</p>
+        <h2 id="np-title">—</h2>
+        <p class="muted" id="np-sub">—</p>
+        <div class="progress"><div class="progress-bar" id="np-progress"></div></div>
+        <div class="row space">
+          <div class="transport">
+            <button class="btn ghost round" data-action="previous" title="Previous">⏮</button>
+            <button class="btn primary round" data-action="playpause" title="Play/Pause" id="playpause">▶</button>
+            <button class="btn ghost round" data-action="next" title="Next">⏭</button>
+          </div>
+          <div class="volume">
+            <span class="muted small" data-i18n="np.volume">Volume</span>
+            <input type="range" id="volume" min="0" max="100" step="1">
+            <span id="volume-value" class="mono">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid three">
+      <div class="card">
+        <h3 data-i18n="dash.vpn">VPN exit</h3>
+        <p class="big" id="dash-vpn">—</p>
+        <p class="muted small" id="dash-vpn-sub">—</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="dash.uplink">Uplink</h3>
+        <p class="big" id="dash-wan">—</p>
+        <p class="muted small" id="dash-wan-sub">—</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="dash.wifi">Access point</h3>
+        <p class="big" id="dash-wifi">—</p>
+        <p class="muted small" id="dash-wifi-sub">—</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row space">
+        <h3 data-i18n="dash.clients">Connected clients</h3>
+        <button class="btn ghost small" id="refresh-clients" data-i18n="common.refresh">Refresh</button>
+      </div>
+      <table class="table" id="clients-table">
+        <thead><tr>
+          <th data-i18n="clients.name">Name</th>
+          <th data-i18n="clients.ip">IP</th>
+          <th data-i18n="clients.mac">MAC</th>
+          <th data-i18n="clients.link">Link</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ airplay -->
+  <section class="panel-view" data-view="airplay">
+    <div class="grid two">
+      <form class="card" id="airplay-form">
+        <h3 data-i18n="ap.title">Receiver</h3>
+        <label class="field"><span data-i18n="ap.name">AirPlay name</span>
+          <input type="text" id="ap-name" maxlength="50"></label>
+        <label class="field"><span data-i18n="ap.device">Output device</span>
+          <select id="ap-device"></select></label>
+        <label class="field"><span data-i18n="ap.delay">Sync delay (ms)</span>
+          <input type="number" id="ap-delay" min="-1000" max="1000" step="10"></label>
+        <label class="field"><span data-i18n="ap.password">AirPlay password (optional)</span>
+          <input type="text" id="ap-password" maxlength="60"></label>
+        <div class="row">
+          <button class="btn primary" type="submit" data-i18n="common.save">Save</button>
+          <button class="btn ghost" type="button" id="ap-test" data-i18n="ap.test">Test tone</button>
+          <button class="btn ghost" type="button" id="ap-restart" data-i18n="ap.restart">Restart receiver</button>
+        </div>
+        <p class="hint" data-i18n="ap.hint">Changing the name, device or delay restarts Shairport Sync; an active AirPlay session (and any group) stops.</p>
+      </form>
+      <div class="card">
+        <h3 data-i18n="ap.status">Receiver status</h3>
+        <dl class="kv">
+          <dt data-i18n="ap.state">Service</dt><dd id="ap-state">—</dd>
+          <dt data-i18n="ap.hdmi">HDMI sink</dt><dd id="ap-hdmi">—</dd>
+          <dt data-i18n="ap.detected">Detected outputs</dt><dd id="ap-devices">—</dd>
+          <dt data-i18n="ap.volume_mode">Volume mode</dt><dd id="ap-volmode">—</dd>
+          <dt data-i18n="ap.meta">Metadata</dt><dd id="ap-meta">—</dd>
+        </dl>
+        <pre class="log" id="ap-log"></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------------- vpn -->
+  <section class="panel-view" data-view="vpn">
+    <div class="card">
+      <div class="row space wrap">
+        <div>
+          <h3 data-i18n="vpn.exit">VPN exit</h3>
+          <p class="muted small" id="vpn-line">—</p>
+        </div>
+        <div class="row">
+          <button class="btn ghost" id="vpn-refresh" data-i18n="vpn.refresh">Refresh list</button>
+          <button class="btn danger" id="vpn-disconnect" data-i18n="vpn.disconnect">Disconnect</button>
+        </div>
+      </div>
+      <div class="row gap wrap">
+        <span class="pill" id="vpn-state">—</span>
+        <span class="pill mono" id="vpn-exit">—</span>
+        <span class="pill" id="vpn-server">—</span>
+        <button class="btn ghost small" id="vpn-selftest" data-i18n="vpn.selftest">Verify exit</button>
+      </div>
+      <p class="error hidden" id="vpn-error"></p>
+    </div>
+    <div class="card">
+      <div class="row space wrap">
+        <h3 data-i18n="vpn.locations">Locations</h3>
+        <input type="search" id="vpn-search" class="search" placeholder="Search…">
+      </div>
+      <div class="loc-list" id="vpn-list"></div>
+    </div>
+    <div class="card">
+      <h3 data-i18n="vpn.settings">Tunnel settings</h3>
+      <label class="field inline"><span data-i18n="vpn.share">Share VPN with LAN clients</span>
+        <input type="checkbox" id="vpn-share"></label>
+      <label class="field inline"><span data-i18n="vpn.block6">Block IPv6 on the LAN</span>
+        <input type="checkbox" id="vpn-block6"></label>
+      <label class="field inline"><span data-i18n="vpn.reconnect">Auto reconnect</span>
+        <input type="checkbox" id="vpn-reconnect"></label>
+      <button class="btn primary" id="vpn-settings-save" data-i18n="common.save">Save</button>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------------- wifi -->
+  <section class="panel-view" data-view="wifi">
+    <form class="card" id="wifi-form">
+      <div class="row space">
+        <h3 data-i18n="wifi.ap">Wi-Fi access point</h3>
+        <label class="switch"><input type="checkbox" id="wifi-enabled"><span></span></label>
+      </div>
+      <div class="grid two">
+        <label class="field"><span data-i18n="wifi.ssid">Network name (SSID)</span>
+          <input type="text" id="wifi-ssid" maxlength="32" autocomplete="off"></label>
+        <label class="field"><span data-i18n="wifi.psk">Password (8-63 chars)</span>
+          <input type="text" id="wifi-psk" minlength="8" maxlength="63" autocomplete="off"></label>
+        <label class="field"><span data-i18n="wifi.channel">Channel (2.4 GHz)</span>
+          <select id="wifi-channel"></select></label>
+        <label class="field"><span data-i18n="wifi.country">Country (regulatory)</span>
+          <select id="wifi-country"></select></label>
+        <label class="field"><span data-i18n="wifi.max">Max clients</span>
+          <input type="number" id="wifi-max" min="1" max="64"></label>
+        <label class="field inline"><span data-i18n="wifi.hidden">Hidden network</span>
+          <input type="checkbox" id="wifi-hidden"></label>
+      </div>
+      <div class="row">
+        <button class="btn primary" type="submit" data-i18n="common.apply">Apply</button>
+        <button class="btn ghost" type="button" id="wifi-regen" data-i18n="wifi.regen">Generate password</button>
+      </div>
+      <p class="hint" data-i18n="wifi.hint">Applying restarts the access point: wireless clients drop for a few seconds.</p>
+      <p class="ok hidden" id="wifi-ok"></p>
+      <p class="error hidden" id="wifi-error"></p>
+    </form>
+    <div class="grid two">
+      <div class="card">
+        <h3 data-i18n="wifi.status">Access point status</h3>
+        <dl class="kv">
+          <dt data-i18n="wifi.state">State</dt><dd id="wifi-state">—</dd>
+          <dt data-i18n="wifi.ssid">Network name (SSID)</dt><dd id="wifi-live-ssid">—</dd>
+          <dt data-i18n="wifi.channel">Channel</dt><dd id="wifi-live-channel">—</dd>
+          <dt data-i18n="wifi.clients">Wireless clients</dt><dd id="wifi-live-clients">—</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h3 data-i18n="wifi.lan">LAN side</h3>
+        <dl class="kv">
+          <dt data-i18n="wifi.bridge">Bridge</dt><dd id="lan-iface">br0</dd>
+          <dt data-i18n="wifi.address">Address</dt><dd id="lan-ip">—</dd>
+          <dt data-i18n="wifi.ethernet">USB Ethernet (eth1)</dt><dd id="lan-eth">—</dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ network -->
+  <section class="panel-view" data-view="network">
+    <div class="card">
+      <h3 data-i18n="net.uplink">Internet uplink</h3>
+      <p class="muted small" data-i18n="net.uplink_hint">The Pi takes its internet from the cable port or from a phone that shares its connection over USB.</p>
+      <div class="radio-row">
+        <label class="radio"><input type="radio" name="wan" value="auto"><span data-i18n="net.auto">Auto</span></label>
+        <label class="radio"><input type="radio" name="wan" value="eth0"><span data-i18n="net.eth0">Ethernet (eth0)</span></label>
+        <label class="radio"><input type="radio" name="wan" value="usb"><span data-i18n="net.usb">USB tethering</span></label>
+      </div>
+      <dl class="kv">
+        <dt data-i18n="net.active">Active uplink</dt><dd id="net-wan">—</dd>
+        <dt data-i18n="net.ip">Uplink address</dt><dd id="net-wan-ip">—</dd>
+        <dt data-i18n="net.detected">Detected interfaces</dt><dd id="net-candidates">—</dd>
+      </dl>
+      <button class="btn primary" id="wan-save" data-i18n="common.apply">Apply</button>
+    </div>
+    <div class="card">
+      <h3 data-i18n="net.plan">Addressing</h3>
+      <dl class="kv">
+        <dt data-i18n="net.bridge">LAN bridge</dt><dd class="mono" id="net-bridge">—</dd>
+        <dt data-i18n="net.dhcp">DHCP range</dt><dd class="mono" id="net-dhcp">—</dd>
+        <dt data-i18n="net.panel">Panel</dt><dd class="mono" id="net-panel">—</dd>
+      </dl>
+      <p class="hint" data-i18n="net.plan_hint">Clients on eth1 and the Wi-Fi AP share one subnet; the VPN exit applies to all of them when it is connected.</p>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------- system -->
+  <section class="panel-view" data-view="system">
+    <div class="grid two">
+      <div class="card">
+        <h3 data-i18n="sys.hardware">Hardware</h3>
+        <dl class="kv">
+          <dt data-i18n="sys.model">Model</dt><dd id="sys-model">—</dd>
+          <dt data-i18n="sys.kernel">Kernel</dt><dd class="mono" id="sys-kernel">—</dd>
+          <dt data-i18n="sys.uptime">Uptime</dt><dd id="sys-uptime">—</dd>
+          <dt data-i18n="sys.temp">CPU temperature</dt><dd id="sys-temp">—</dd>
+          <dt data-i18n="sys.mem">Memory</dt><dd id="sys-mem">—</dd>
+          <dt data-i18n="sys.disk">Storage</dt><dd id="sys-disk">—</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h3 data-i18n="sys.services">Services</h3>
+        <ul class="svc-list" id="sys-services"></ul>
+      </div>
+    </div>
+    <div class="grid two">
+      <form class="card" id="password-form">
+        <h3 data-i18n="sys.password">Panel password</h3>
+        <label class="field"><span data-i18n="sys.new_password">New password</span>
+          <input type="password" id="password-new" minlength="8" autocomplete="new-password"></label>
+        <label class="field"><span data-i18n="sys.repeat">Repeat</span>
+          <input type="password" id="password-repeat" minlength="8" autocomplete="new-password"></label>
+        <button class="btn primary" type="submit" data-i18n="common.save">Save</button>
+        <p class="ok hidden" id="password-ok"></p>
+        <p class="error hidden" id="password-error"></p>
+      </form>
+      <div class="card">
+        <h3 data-i18n="sys.device">Device</h3>
+        <label class="field"><span data-i18n="sys.device_name">Name</span>
+          <input type="text" id="device-name-input" maxlength="32"></label>
+        <button class="btn primary" id="device-save" data-i18n="common.save">Save</button>
+        <hr>
+        <button class="btn danger" id="reboot" data-i18n="sys.reboot">Reboot appliance</button>
+        <p class="hint" data-i18n="sys.reboot_hint">Stops AirPlay, the access point and the VPN tunnel for about 30 seconds.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

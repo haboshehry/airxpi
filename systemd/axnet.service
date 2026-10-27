@@ -1,0 +1,20 @@
+[Unit]
+Description=AirXPi network manager (uplink, LAN bridge, Wi-Fi access point)
+Documentation=https://github.com/haboshehry/airxpi
+After=network-pre.target dhcpcd.service
+Wants=network-pre.target
+Before=axpanel.service hostapd.service dnsmasq.service
+
+[Service]
+Type=simple
+Environment=PYTHONPATH=/opt/airxpi/lib
+Environment=PYTHONUNBUFFERED=1
+ExecStartPre=/usr/bin/python3 -m airxpi.axnetd apply
+ExecStart=/usr/bin/python3 -m airxpi.axnetd serve
+Restart=always
+RestartSec=4
+# axnetd configures interfaces, hostapd, dnsmasq and nftables
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

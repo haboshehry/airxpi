@@ -1,0 +1,26 @@
+[Unit]
+Description=AirXPi HDMI user interface (now playing + settings)
+Documentation=https://github.com/haboshehry/airxpi
+After=axpanel.service systemd-user-sessions.service
+Wants=axpanel.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+Environment=HOME=/root
+Environment=PYTHONPATH=/opt/airxpi/lib
+Environment=XDG_RUNTIME_DIR=/run/airxpi
+Environment=DISPLAY=:0
+Environment=QT_LOGGING_RULES=qt.qpa.*=false
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty
+StandardOutput=journal
+ExecStart=/usr/bin/xinit /opt/airxpi/bin/axgui-client -- /usr/bin/X :0 vt1 -keeptty -nolisten tcp -nocursor
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

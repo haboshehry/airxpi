@@ -1,0 +1,5 @@
+#!/bin/sh
+# X client started by xinit for the HDMI user interface.
+export PYTHONPATH=/opt/airxpi/lib
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/airxpi}
+exec /usr/bin/python3 -m airxpi.gui "$@"

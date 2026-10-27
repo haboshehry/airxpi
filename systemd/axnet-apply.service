@@ -1,0 +1,8 @@
+[Unit]
+Description=AirXPi network re-apply (triggered by USB tethering hotplug)
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/opt/airxpi/lib
+ExecStart=/usr/bin/python3 -m airxpi.axnetd apply
+TimeoutStartSec=90

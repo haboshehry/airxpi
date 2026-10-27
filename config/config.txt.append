@@ -1,0 +1,10 @@
+# --- AirXPi ---
+# HDMI audio + KMS so the receiver, the GUI and the TV share one display pipe.
+# Keep this block at the end of config.txt; later lines win.
+dtparam=audio=on
+hdmi_force_hotplug=1
+hdmi_drive=2
+gpu_mem=128
+disable_splash=1
+dtoverlay=vc4-kms-v3d
+max_framebuffers=2

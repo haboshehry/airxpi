@@ -1,0 +1,3 @@
+# AirXPi: re-apply the network plan when a phone starts or stops sharing over USB.
+ACTION=="add|change", SUBSYSTEM=="net", KERNEL=="usb*|enx*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="axnet-apply.service"
+ACTION=="add|change", SUBSYSTEM=="net", KERNEL=="eth1", TAG+="systemd", ENV{SYSTEMD_WANTS}+="axnet-apply.service"

@@ -1,0 +1,22 @@
+[Unit]
+Description=AirPlay 2 receiver (shairport-sync supervisor + metadata panel)
+Documentation=https://github.com/haboshehry/airxpi
+After=avahi-daemon.service dbus.service nqptp.service sound.target
+Wants=nqptp.service
+Requires=avahi-daemon.service
+
+[Service]
+Type=simple
+Environment=PYTHONPATH=/opt/airxpi/lib
+Environment=PANEL_PORT=8090
+Environment=XDG_RUNTIME_DIR=/run/airxpi
+RuntimeDirectory=airxpi
+RuntimeDirectoryMode=0755
+ExecStart=/usr/bin/python3 /opt/airxpi/airplay2/main.py
+Restart=always
+RestartSec=3
+# AirPlay 2 timing wants realtime scheduling for nqptp/shairport
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target
