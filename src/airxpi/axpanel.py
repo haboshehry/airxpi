@@ -438,6 +438,14 @@ def build_state():
     airplay = airplay_f.result()
     vpn = vpn_f.result()
     net = net_f.result()
+
+    # the receiver reports every playback PCM with connected=None; mark them and
+    # flag the HDMI ones so both front-ends can show where the sound goes
+    for device in airplay.get("devices") or []:
+        label = ("%s %s" % (device.get("card_name", ""), device.get("pcm_name", ""))).lower()
+        device["hdmi"] = "hdmi" in label or "vc4" in label
+        if device.get("connected") is None:
+            device["connected"] = True
     vpn_status = (vpn or {}).get("status", {}) if isinstance(vpn, dict) else {}
     return {
         "ok": True,

@@ -436,13 +436,14 @@ function render(st) {
     $("ap-password").value = cfg.password || "";
     $("ap-state").textContent = airplay.server && airplay.server.running ? `running (pid ${airplay.server.pid || "-"})` : "stopped";
     $("ap-hdmi").textContent = airplay.hdmi_sink ? (airplay.displays || []).join(", ") : "no HDMI sink";
-    $("ap-devices").textContent = (airplay.devices || []).filter((d) => d.connected).map((d) => d.label).join(", ") || "—";
+    $("ap-devices").textContent = (airplay.devices || [])
+      .map((d) => (d.hdmi ? `${d.label} (HDMI)` : d.label)).join(", ") || "—";
     $("ap-volmode").textContent = (airplay.server && airplay.server.volume_mode) || "—";
     $("ap-meta").textContent = airplay.metadata_state || "—";
     const select = $("ap-device");
     const current = cfg.device || "";
     const options = (airplay.devices || []).map((d) =>
-      `<option value="${esc(d.value)}"${d.value === current ? " selected" : ""}>${esc(d.label)}${d.connected ? " ✓" : ""}</option>`);
+      `<option value="${esc(d.value)}"${d.value === current ? " selected" : ""}>${esc(d.label)}${d.hdmi ? " — HDMI" : ""}</option>`);
     if (select.dataset.signature !== options.join("")) {
       select.innerHTML = options.join("") || `<option value="${esc(current)}">${esc(current || "auto")}</option>`;
       select.dataset.signature = options.join("");

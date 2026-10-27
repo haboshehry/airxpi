@@ -37,7 +37,7 @@ BASE_PKGS="python3 python3-pyqt5 alsa-utils avahi-daemon avahi-utils libnss-mdns
 
 BUILD_PKGS="git build-essential autoconf automake libtool pkg-config
  libasound2-dev libavahi-client-dev libssl-dev libsoxr-dev libplist-dev
- libpopt-dev libconfig-dev libglib2.0-dev libdbus-1-dev"
+ libpopt-dev libconfig-dev libglib2.0-dev libdbus-1-dev libplist-utils xxd libsodium-dev libgcrypt20-dev libavutil-dev libavcodec-dev libavformat-dev libswresample-dev"
 
 say() { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m    %s\033[0m\n' "$*"; }
@@ -110,8 +110,7 @@ build_shairport() {
     autoreconf -fi >/dev/null 2>&1
     ./configure --sysconfdir=/etc \
         --with-alsa --with-avahi --with-ssl=openssl --with-soxr \
-        --with-metadata --with-dbus-interface --with-airplay-2 \
-        --with-systemd --with-stdout --with-pipe >/dev/null
+        --with-metadata --with-dbus-interface --with-airplay-2 >/dev/null
     make -j"$(nproc)" >/dev/null
     make install >/dev/null
     cd - >/dev/null
@@ -154,6 +153,7 @@ cp -a "$SRC/vendor/vpnexit/vpnexit.py" "$PREFIX/vpnexit/vpnexit.py"
 cp -a "$SRC/vendor/vpnexit/web/." "$PREFIX/vpnexit/web/"
 
 install -m 0755 "$SRC/scripts/axgui-client" "$PREFIX/bin/axgui-client"
+install -m 0755 "$SRC/scripts/axp-sync-name" "$PREFIX/bin/axp-sync-name"
 install -m 0755 "$SRC/scripts/axp-audio" /usr/local/sbin/axp-audio
 install -m 0755 "$SRC/scripts/axp-passwd" /usr/local/sbin/axp-passwd
 install -m 0755 "$SRC/scripts/axp-doctor" /usr/local/sbin/axp-doctor

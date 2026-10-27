@@ -773,8 +773,10 @@ class AirXPiWindow(QWidget):
                 self.inp_name.setText(cfg.get("name") or "")
             if not self.cmb_device.count():
                 for device in airplay.get("devices") or []:
-                    self.cmb_device.addItem(device.get("label") or device.get("value"),
-                                            device.get("value"))
+                    label = device.get("label") or device.get("value")
+                    if device.get("hdmi"):
+                        label = "%s (HDMI)" % label
+                    self.cmb_device.addItem(label, device.get("value"))
             current = cfg.get("device")
             index = self.cmb_device.findData(current) if current else -1
             if index >= 0 and self.cmb_device.currentIndex() != index:
