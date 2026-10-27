@@ -34,25 +34,23 @@ prepare() {
     # Debian's archive keys must be readable inside the rootfs before the first
     # chroot apt run. With a foreign-architecture debootstrap (qemu) the keyring
     # occasionally ends up missing, and every `apt-get update` then fails with
-    # NO_PUBKEY. Copy the host's current keyring into the image's first stage.
-    python3 - "$PIGEN" <<'PY'
-import pathlib
-import sys
-
-pigen = pathlib.Path(sys.argv[1])
-run = pigen / "stage0" / "00-configure-apt" / "00-run.sh"
-text = run.read_text()
-block = """# -- airxpi: make sure the Debian archive keyring is inside the rootfs
+    # NO_PUBKEY. Insert the copy right before pi-gen enters the chroot.
+    STAGE0="$PIGEN/stage0/00-configure-apt/00-run.sh"
+    if ! grep -q 'airxpi: keep the Debian archive keyring' "$STAGE0"; then
+        cat > "$WORK/keyring-sync.txt" <<'KEYRING'
+# -- airxpi: keep the Debian archive keyring inside the rootfs
 install -m 644 /usr/share/keyrings/debian-archive-keyring.gpg "${ROOTFS_DIR}/usr/share/keyrings/" 2>/dev/null || true
 mkdir -p "${ROOTFS_DIR}/etc/apt/trusted.gpg.d"
 cp -f /etc/apt/trusted.gpg.d/debian-archive-*.asc "${ROOTFS_DIR}/etc/apt/trusted.gpg.d/" 2>/dev/null || true
 
-"""
-if "-- airxpi: make sure" not in text:
-    text = text.replace("on_chroot <<- \\EOF", block + "on_chroot <<- \\EOF", 1)
-    run.write_text(text)
-    print("stage0 keyring sync injected")
-PY
+KEYRING
+        awk '/^on_chroot/ && !done { while ((getline line < sync) > 0) print line; done = 1 } { print }' \
+            sync="$WORK/keyring-sync.txt" "$STAGE0" > "$STAGE0.new"
+        cat "$STAGE0.new" > "$STAGE0"
+        rm -f "$STAGE0.new"
+        chmod 755 "$STAGE0"
+        echo "==> stage0 keyring sync injected"
+    fi
 
     # only the last stage exports an image
     for stage in stage0 stage1 stage2; do
