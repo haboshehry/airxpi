@@ -66,6 +66,16 @@ KEYRING
         echo "==> dropped packages that the bookworm arm64 repository lacks"
     fi
 
+    # rpi-resize is a unit of the newer Raspberry Pi OS layout; on the arm64
+    # bookworm branch `systemctl enable` aborts the stage with "unit does not
+    # exist". The appliance resizes its card on first boot by itself, so the unit
+    # (and the failure) is irrelevant here.
+    SYS_TWEAKS="$PIGEN/stage2/01-sys-tweaks/01-run.sh"
+    if [ -f "$SYS_TWEAKS" ] && grep -q 'systemctl enable rpi-resize' "$SYS_TWEAKS"; then
+        sed -i 's|^[[:space:]]*systemctl enable rpi-resize[[:space:]]*$|\tsystemctl enable rpi-resize 2>/dev/null || true|' "$SYS_TWEAKS"
+        echo "==> made the rpi-resize enable non-fatal"
+    fi
+
     # only the last stage exports an image
     for stage in stage0 stage1 stage2; do
         rm -f "$PIGEN/$stage/EXPORT_IMAGE" "$PIGEN/$stage/EXPORT_NOOBS"
