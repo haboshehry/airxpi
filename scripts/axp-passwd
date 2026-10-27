@@ -20,14 +20,15 @@ if not result.get("ok"):
     sys.stderr.write("error: %s\n" % result.get("error"))
     raise SystemExit(1)
 
-url = "http://%s/" % (common.ip_of("br0") or "10.42.0.1")
+url = "http://%s/" % (common.ip_of("br0") or "192.168.168.1")
+print("panel user    : admin")
 print("panel password: %s" % password)
 print("panel url     : %s" % url)
 
 # keep the boot-partition note in step so a headless install can always get in
 try:
     with open("/boot/firmware/AIRXPI.txt", "w") as fh:
-        fh.write("AirXPi appliance\n\npanel   : %s\npassword: %s\n\n"
+        fh.write("AirXPi appliance\n\npanel   : %s\nuser    : admin\npassword: %s\n\n"
                  "Change it in the panel: System -> Panel password\n" % (url, password))
 except OSError:
     pass

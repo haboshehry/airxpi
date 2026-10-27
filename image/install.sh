@@ -348,13 +348,9 @@ fi
 say "panel credentials"
 PASSWORD=""
 if [ -f "$MARKER" ] && [ -f "$CONFDIR/panel.json" ]; then
-    echo "    keeping the existing panel password"
+    echo "    keeping the existing panel credentials"
 else
-    PASSWORD=$(/usr/bin/python3 - <<'PY'
-import secrets
-print(secrets.token_urlsafe(8))
-PY
-)
+    PASSWORD="${AIRXPI_PASSWORD:-admin}"
     /usr/bin/python3 - "$PASSWORD" <<'PY'
 import sys
 from airxpi import axpanel
@@ -364,8 +360,11 @@ PY
     {
         echo "AirXPi appliance"
         echo
-        echo "panel   : http://10.42.0.1/   (or http://airxpi.local/)"
+        echo "panel   : http://192.168.168.1/   (or http://airxpi.local/)"
+        echo "user    : admin"
         echo "password: $PASSWORD"
+        echo
+        echo "Change the password in the panel (System) after the first login."
         echo
         echo "Access point: AirXPi / see the panel (Wi-Fi tab)"
         echo "CLI: axp-doctor, axp-passwd, axp-audio"
@@ -389,8 +388,8 @@ cat <<EOF
 
   AirXPi is installed.
 
-  Panel     : http://10.42.0.1/  (also http://airxpi.local/)
-  Password  : ${PASSWORD:-unchanged - use axp-passwd to reset}
+  Panel     : http://192.168.168.1/  (also http://airxpi.local/)
+  Login     : admin / ${PASSWORD:-unchanged - use axp-passwd to reset}
   Wi-Fi AP  : AirXPi (see /etc/airxpi/airxpi.json)
   HDMI UI   : starts on tty1 (axgui.service)
 

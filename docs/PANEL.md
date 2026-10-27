@@ -1,21 +1,22 @@
 # Web panel
 
-`http://10.42.0.1/` (or `http://airxpi.local/`) - one page, no build step, English
+`http://192.168.168.1/` (or `http://airxpi.local/`) - one page, no build step, English
 and Persian (the toggle is in the header; Persian switches the layout to RTL).
 
 ## Authentication
 
-* Password: PBKDF2-SHA256, 200 000 rounds, stored in `/etc/airxpi/panel.json`.
-  Default is generated at install time and written to
-  `/boot/firmware/AIRXPI.txt` + the console banner. Change it in *System →
-  Panel password* or with `axp-passwd`.
+* Login: user `admin`, default password `admin` (also in
+  `/boot/firmware/AIRXPI.txt`). PBKDF2-SHA256, 200 000 rounds, stored in
+  `/etc/airxpi/panel.json`. Change it in *System -> Panel password* or with
+  `axp-passwd`; the panel warns while the default is still active.
+* The panel is reachable from the LAN side only (`panel.wan_access = false` by
+  default): `eth1` and the Wi-Fi AP. Set it to `true` if you also want it over the
+  uplink network.
 * Session: HMAC-signed cookie `axpi`, 12 hours, `HttpOnly`, `SameSite=Lax`.
 * Scripts: `X-Auth-Token: <api_token>` from `/etc/airxpi/panel.json` (constant-time
   compare). Loopback requests are trusted so the HDMI UI needs no credentials.
-* A failed login sleeps 0.6 s to slow down brute force. Put the panel on the uplink
-  only if you trust that network: *System → device settings* has no switch, but
-  `panel.wan_access = false` in `/etc/airxpi/airxpi.json` makes `axnetd` add a drop
-  rule for TCP 80 on the uplink interface.
+* A failed login sleeps 0.6 s to slow down brute force. The panel is LAN-only by default; `panel.wan_access = true` in
+  `/etc/airxpi/airxpi.json` lets `axnetd` serve it on the uplink interface as well.
 
 ## Screens
 

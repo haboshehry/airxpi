@@ -45,9 +45,9 @@ DEFAULTS = {
         "mode": "auto",
     },
     "lan": {
-        "cidr": "10.42.0.1/24",
-        "dhcp_start": "10.42.0.10",
-        "dhcp_end": "10.42.0.200",
+        "cidr": "192.168.168.1/24",
+        "dhcp_start": "192.168.168.10",
+        "dhcp_end": "192.168.168.200",
         "lease": "12h",
         "ethernet": True,
         "nat": True,
@@ -66,7 +66,7 @@ DEFAULTS = {
         "name": "AirXPi",
     },
     "panel": {
-        "wan_access": True,
+        "wan_access": False,
     },
 }
 
@@ -302,13 +302,13 @@ def lan_cidr():
 
 
 def lan_network():
-    """``10.42.0.0/24`` derived from the configured LAN address."""
+    """``192.168.168.0/24`` derived from the configured LAN address."""
     cidr = lan_cidr()
     try:
         addr, prefix = cidr.split("/")
     except ValueError:
-        return "10.42.0.0/24"
+        return "192.168.168.0/24"
     octets = addr.split(".")
     if len(octets) != 4 or prefix != "24":
-        return "10.42.0.0/24"
+        return "192.168.168.0/24"
     return "%s.%s.%s.0/24" % (octets[0], octets[1], octets[2])

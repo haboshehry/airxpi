@@ -827,7 +827,7 @@ class AirXPiWindow(QWidget):
         lan = (net.get("lan") or {})
         wan = (net.get("wan") or {})
         self.footer_left.setText("%s %s  ·  %s %s" % (
-            self.t("panel"), "http://%s/" % (lan.get("ip") or "10.42.0.1"),
+            self.t("panel"), "http://%s/" % (lan.get("ip") or "192.168.168.1"),
             self.t("uplink"), wan.get("iface") or "—"))
         self.footer_right.setText("kernel %s · up %s" % (
             system.get("kernel", "—"), fmt_uptime(system.get("uptime"))))

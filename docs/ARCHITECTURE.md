@@ -83,7 +83,7 @@ Details and the exact ruleset: [NETWORK.md](NETWORK.md).
 
 * **One panel, three engines.** The user asked for VPN + wireless in one place;
   proxying keeps each engine's tested logic untouched and gives one password.
-* **`br0` instead of two subnets.** Wireless and wire clients share `10.42.0.0/24`,
+* **`br0` instead of two subnets.** Wireless and wire clients share `192.168.168.0/24`,
   so `vpnexit`'s single `lan_iface` mark covers both. `br0` is created by `axnetd`
   with multicast snooping **off** - mDNS (AirPlay discovery) must be flooded.
 * **Mark-based VPN routing.** The tunnel does not replace the default route; only

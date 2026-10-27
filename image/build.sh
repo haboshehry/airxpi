@@ -39,9 +39,10 @@ prepare() {
     if ! grep -q 'airxpi: keep the Debian archive keyring' "$STAGE0"; then
         cat > "$WORK/keyring-sync.txt" <<'KEYRING'
 # -- airxpi: keep the Debian archive keyring inside the rootfs
-install -m 644 /usr/share/keyrings/debian-archive-keyring.gpg "${ROOTFS_DIR}/usr/share/keyrings/" 2>/dev/null || true
-mkdir -p "${ROOTFS_DIR}/etc/apt/trusted.gpg.d"
+mkdir -p "${ROOTFS_DIR}/usr/share/keyrings" "${ROOTFS_DIR}/etc/apt/trusted.gpg.d"
+install -m 644 /usr/share/keyrings/debian-archive-keyring.gpg "${ROOTFS_DIR}/usr/share/keyrings/debian-archive-keyring.gpg"
 cp -f /etc/apt/trusted.gpg.d/debian-archive-*.asc "${ROOTFS_DIR}/etc/apt/trusted.gpg.d/" 2>/dev/null || true
+ls -l "${ROOTFS_DIR}/usr/share/keyrings/debian-archive-keyring.gpg" >&2
 
 KEYRING
         awk '/^on_chroot/ && !done { while ((getline line < sync) > 0) print line; done = 1 } { print }' \

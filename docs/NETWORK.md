@@ -8,7 +8,7 @@
 | `usb0`, `enx*` | uplink (phone tethering) | DHCP (172.20.10.x / 192.168.42.x) | dhcpcd |
 | `eth1` | LAN, wired clients | bridge member | axnetd |
 | `wlan0` | LAN, Wi-Fi AP | bridge member (hostapd `bridge=br0`) | axnetd + hostapd |
-| `br0` | LAN | `10.42.0.1/24` | axnetd |
+| `br0` | LAN | `192.168.168.1/24` | axnetd |
 
 `/etc/dhcpcd.conf` contains an axnetd-owned block:
 
@@ -56,9 +56,9 @@ change restarts hostapd (clients reconnect in a few seconds).
 ```
 interface=br0
 bind-dynamic
-dhcp-range=10.42.0.10,10.42.0.200,255.255.255.0,12h
-dhcp-option=option:router,10.42.0.1
-dhcp-option=option:dns-server,10.42.0.1
+dhcp-range=192.168.168.10,192.168.168.200,255.255.255.0,12h
+dhcp-option=option:router,192.168.168.1
+dhcp-option=option:dns-server,192.168.168.1
 except-interface=eth0
 except-interface=usb0
 ```
@@ -86,7 +86,7 @@ table inet airxpi {
 table ip airxpi_nat {
     chain postrouting {
         type nat hook postrouting priority srcnat; policy accept;
-        oifname != "br0" ip saddr 10.42.0.0/24 meta mark != 0x1a1 masquerade
+        oifname != "br0" ip saddr 192.168.168.0/24 meta mark != 0x1a1 masquerade
     }
 }
 ```

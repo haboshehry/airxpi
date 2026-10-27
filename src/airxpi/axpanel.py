@@ -31,6 +31,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import common as c
 
 PBKDF2_ROUNDS = 200_000
+DEFAULT_USER = "admin"
+DEFAULT_PASSWORD = "admin"
 COOKIE = "axpi"
 SESSION_HOURS = 12
 STATIC_TYPES = {
@@ -67,7 +69,11 @@ def panel_config():
     data = c.load_json(c.PANEL_CONF, {})
     changed = False
     if not data.get("password_hash"):
-        data["password_hash"] = _hash(secrets.token_urlsafe(9))
+        data["password_hash"] = _hash(DEFAULT_PASSWORD)
+        data["default_password"] = True
+        changed = True
+    if not data.get("username"):
+        data["username"] = DEFAULT_USER
         changed = True
     if not data.get("secret"):
         data["secret"] = secrets.token_hex(32)
@@ -103,6 +109,7 @@ def set_password(password):
         return {"ok": False, "error": "password must be at least 8 characters"}
     data = panel_config()
     data["password_hash"] = _hash(password)
+    data["default_password"] = False
     c.save_json(c.PANEL_CONF, data, 0o600)
     return {"ok": True}
 
@@ -299,6 +306,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {
                 "ok": True,
                 "authenticated": self._authed(config),
+                "username": config.get("username", DEFAULT_USER),
+                "default_password": bool(config.get("default_password")),
                 "language": config.get("language", "en"),
                 "local": self._local(),
                 "version": "1.0.0",
@@ -335,7 +344,10 @@ class Handler(BaseHTTPRequestHandler):
         body = self._body()
 
         if path == "/api/login":
-            if _verify(str(body.get("password") or ""), config["password_hash"]):
+            user = str(body.get("username") or DEFAULT_USER).strip().encode()
+            expected = str(config.get("username", DEFAULT_USER)).encode()
+            if hmac.compare_digest(user, expected) and _verify(
+                    str(body.get("password") or ""), config["password_hash"]):
                 token = issue_token(config["secret"])
                 header = "%s=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=%d" % (
                     COOKIE, token, SESSION_HOURS * 3600)

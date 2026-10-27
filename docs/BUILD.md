@@ -82,7 +82,7 @@ curl -s localhost:8090/api/state | head -c 400
 ```
 
 Then: connect the TV, pick the device from an iPhone, confirm audio and cover art,
-and check `http://10.42.0.1/` from a client on the AP.
+and check `http://192.168.168.1/` from a client on the AP.
 
 ## Updating a running appliance
 

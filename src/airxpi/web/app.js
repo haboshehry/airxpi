@@ -4,9 +4,10 @@
 const I18N = {
   en: {
     "login.sub": "AirPlay 2 receiver & VPN exit",
+    "login.username": "User name",
     "login.password": "Panel password",
     "login.submit": "Sign in",
-    "login.hint": "The password is printed on the boot partition (AIRXPI.txt) and in the console banner.",
+    "login.hint": "Default login is admin / admin. Change it in System after the first sign-in.",
     "common.logout": "Log out",
     "common.save": "Save",
     "common.apply": "Apply",
@@ -108,12 +109,14 @@ const I18N = {
     "msg.refreshing": "Updating the location list…",
     "msg.no_clients": "No clients yet",
     "msg.never": "never",
+    "msg.default_pass": "Default password is still in use - change it in System.",
   },
   fa: {
     "login.sub": "گیرنده AirPlay 2 و دروازه VPN",
+    "login.username": "نام کاربری",
     "login.password": "گذرواژه پنل",
     "login.submit": "ورود",
-    "login.hint": "گذرواژه در پارتیشن بوت (AIRXPI.txt) و در پیام کنسول چاپ می‌شود.",
+    "login.hint": "ورود پیش‌فرض admin / admin است. بعد از اولین ورود از بخش سیستم تغییرش دهید.",
     "common.logout": "خروج",
     "common.save": "ذخیره",
     "common.apply": "اعمال",
@@ -215,6 +218,7 @@ const I18N = {
     "msg.refreshing": "به‌روزرسانی فهرست موقعیت‌ها…",
     "msg.no_clients": "هنوز کاربری متصل نیست",
     "msg.never": "هرگز",
+    "msg.default_pass": "گذرواژه پیش‌فرض هنوز فعال است — از بخش سیستم تغییرش دهید.",
   },
 };
 
@@ -332,6 +336,7 @@ async function boot() {
     if (!session.authenticated) { showLogin(); return; }
     showApp();
     refresh(true);
+    if (session.default_password) setTimeout(() => toast(t("msg.default_pass"), true), 800);
   } catch (err) {
     showLogin();
   }
@@ -481,7 +486,7 @@ function render(st) {
   $("net-candidates").textContent = [...(cands.ethernet || []), ...(cands.usb || [])].join(", ") || "—";
   $("net-bridge").textContent = `${lan.iface || "br0"} · ${lan.ip || ""}`;
   $("net-dhcp").textContent = `${(st.net && st.net.config && st.net.config.lan.dhcp_start) || "10.42.0.10"} – ${(st.net && st.net.config && st.net.config.lan.dhcp_end) || "10.42.0.200"}`;
-  $("net-panel").textContent = `http://${lan.ip || "10.42.0.1"}/`;
+  $("net-panel").textContent = `http://${lan.ip || "192.168.168.1"}/`;
   document.querySelectorAll("input[name=wan]").forEach((input) => {
     input.checked = (wan.mode || "auto") === input.value;
   });
@@ -625,7 +630,8 @@ function bind() {
   $("login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const password = $("login-password").value;
-    const res = await api("/api/login", { password });
+    const username = ($("login-username").value || "admin").trim();
+    const res = await api("/api/login", { username, password });
     if (res.ok) {
       $("login-password").value = "";
       $("login-error").classList.add("hidden");

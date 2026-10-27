@@ -20,12 +20,16 @@
       </div>
     </div>
     <label class="field">
+      <span data-i18n="login.username">User name</span>
+      <input type="text" id="login-username" name="username" value="admin" autocomplete="username" required>
+    </label>
+    <label class="field">
       <span data-i18n="login.password">Panel password</span>
       <input type="password" id="login-password" name="password" required autofocus>
     </label>
     <p class="error hidden" id="login-error"></p>
     <button class="btn primary block" type="submit" data-i18n="login.submit">Sign in</button>
-    <p class="hint" data-i18n="login.hint">The password is printed on the boot partition (AIRXPI.txt) and in the console banner.</p>
+    <p class="hint" data-i18n="login.hint">Default login is admin / admin. Change it in System after the first sign-in.</p>
   </form>
 </div>
 

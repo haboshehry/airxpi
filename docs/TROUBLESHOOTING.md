@@ -32,7 +32,7 @@ uplink, VPN state, AirPlay state and the last warnings in one screen.
 | `wlan0` not found | `rfkill list` - unblock with `rfkill unblock wlan`; check `dtoverlay=disable-wifi` is not set. |
 | hostapd fails to start | `journalctl -u hostapd -b`. Usually an invalid channel for the regulatory domain: set the country first, or pick 1-11. |
 | Clients connect, no internet | Uplink missing (`ip route`), or dnsmasq down (`systemctl status dnsmasq`). `axp-doctor` shows both. |
-| Clients get no address | `br0` must be up with `10.42.0.1/24`: `ip -br addr show br0`. Re-apply with `python3 -m airxpi.axnetd apply`. |
+| Clients get no address | `br0` must be up with `192.168.168.1/24`: `ip -br addr show br0`. Re-apply with `python3 -m airxpi.axnetd apply`. |
 | Slow throughput | It is a Pi 3B: 2.4 GHz 802.11n, roughly 30-45 Mbit/s real throughput, and the VPN adds encryption on the same CPU. |
 
 ## Uplink / tethering

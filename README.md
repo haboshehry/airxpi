@@ -67,8 +67,10 @@ sudo ./image/build-in-docker.sh      # produces dist/airxpi-*-rpi3b.img.xz
 ```
 
 Write `dist/airxpi-*.img.xz` with Raspberry Pi Imager or `dd`, boot the Pi, and open
-`http://10.42.0.1/` (or `http://airxpi.local/`). The panel password is on the boot
-partition in `AIRXPI.txt` and in the console banner.
+`http://192.168.168.1/` (or `http://airxpi.local/`) - the default sign-in is
+**admin / admin** (also written to `AIRXPI.txt` on the boot partition). Change it in
+*System -> Panel password* right away; the panel keeps reminding you while it is still
+the default.
 
 ### B. On top of an existing Raspberry Pi OS Lite (Bookworm, 64-bit)
 
@@ -88,7 +90,8 @@ The installer is idempotent and keeps `/etc/airxpi/airxpi.json`,
    (password is in `/etc/airxpi/airxpi.json`, printed by the installer).
 2. Plug the uplink: cable into `eth0`, or USB tethering from the phone
    (iPhone: *Personal Hotspot* + *Trust*; Android: *USB tethering*).
-3. Open the panel: **Wi-Fi** tab to change SSID/password/channel/country,
+3. Open the panel (`http://192.168.168.1/`, admin / admin): **Wi-Fi** tab to change
+   SSID/password/channel/country,
    **VPN** tab to pick a location, **System** for the panel password and reboot.
 4. On the TV: the AirPlay view shows the cover art; the right column has the
    AirPlay / VPN / Wi-Fi settings. Pick the device in the iPhone Control Center.
