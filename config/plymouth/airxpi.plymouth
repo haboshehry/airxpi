@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=AirXPi
+Description=AirXPi boot splash: logo with a progress bar underneath
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/airxpi
+ScriptFile=/usr/share/plymouth/themes/airxpi/airxpi.script

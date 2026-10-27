@@ -12,13 +12,18 @@ Environment=PYTHONPATH=/opt/airxpi/lib
 Environment=XDG_RUNTIME_DIR=/run/airxpi
 Environment=DISPLAY=:0
 Environment=QT_LOGGING_RULES=qt.qpa.*=false
+# TVs are watched from a distance: scale the whole UI up instead of shipping
+# 13 px labels. 1920x1080 / 1.5 = 1280x720 logical pixels.
+Environment=QT_SCALE_FACTOR=1.5
+Environment=QT_AUTO_SCREEN_SCALE_FACTOR=0
+Environment=QT_FONT_DPI=96
 TTYPath=/dev/tty1
 TTYReset=yes
 TTYVHangup=yes
 TTYVTDisallocate=yes
 StandardInput=tty
 StandardOutput=journal
-ExecStart=/usr/bin/xinit /opt/airxpi/bin/axgui-client -- /usr/bin/X :0 vt1 -keeptty -nolisten tcp -nocursor
+ExecStart=/usr/bin/xinit /opt/airxpi/bin/axgui-client -- /usr/bin/X :0 vt1 -keeptty -nolisten tcp -novtswitch
 Restart=always
 RestartSec=5
 

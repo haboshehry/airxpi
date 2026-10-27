@@ -399,6 +399,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._engine(result)
         if path == "/api/system/password":
             return self._send(200, set_password(str(body.get("password") or "")))
+        if path == "/api/diag":
+            return self._send(200, {"ok": True, "text": diagnostics()})
+
         if path == "/api/system/reboot":
             threading.Thread(
                 target=lambda: (time.sleep(1.0), c.run(["systemctl", "reboot"], timeout=10)),
@@ -450,6 +453,40 @@ class Handler(BaseHTTPRequestHandler):
 # --------------------------------------------------------------------------
 # aggregated state
 # --------------------------------------------------------------------------
+def diagnostics():
+    """Everything needed to debug the box without a keyboard (panel -> System)."""
+    sections = [
+        ("uname", ["uname", "-a"]),
+        ("uptime", ["uptime"]),
+        ("addresses", ["ip", "-br", "addr"]),
+        ("links", ["ip", "-br", "link"]),
+        ("wifi", ["iw", "dev"]),
+        ("hostapd config", ["cat", "/etc/hostapd/hostapd.conf"]),
+        ("nftables", ["nft", "list", "ruleset"]),
+        ("alsa", ["aplay", "-l"]),
+        ("alsa routes", ["amixer", "-c", "0", "scontents"]),
+        ("services", ["systemctl", "is-active", "axnet", "axpanel", "axplay", "axgui",
+                      "axcec", "hostapd", "dnsmasq", "avahi-daemon", "ssh"]),
+        ("journal axnet", ["journalctl", "-u", "axnet", "-n", "40", "--no-pager"]),
+        ("journal axgui", ["journalctl", "-u", "axgui", "-n", "25", "--no-pager"]),
+        ("journal axplay", ["journalctl", "-u", "axplay", "-n", "25", "--no-pager"]),
+        ("journal axcec", ["journalctl", "-u", "axcec", "-n", "15", "--no-pager"]),
+        ("journal hostapd", ["journalctl", "-u", "hostapd", "-n", "25", "--no-pager"]),
+        ("kernel hdmi/cec", ["sh", "-c", "dmesg | grep -iE 'hdmi|cec|alsa|snd' | tail -25"]),
+    ]
+    out = []
+    for title, command in sections:
+        rc, text = c.run(command, timeout=15)
+        out.append("### %s (rc=%s)\n%s" % (title, rc, text or "-"))
+    try:
+        cfg = c.config()
+        cfg["wifi"]["passphrase"] = "***" if cfg["wifi"].get("passphrase") else ""
+        out.append("### config\n" + json.dumps(cfg, indent=2, ensure_ascii=False))
+    except Exception as exc:  # noqa: BLE001
+        out.append("### config\n%r" % (exc,))
+    return "\n\n".join(out)
+
+
 def build_state():
     airplay_f = POOL.submit(airplay_call, "state")
     vpn_f = POOL.submit(vpn_call, "status")

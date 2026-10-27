@@ -15,18 +15,22 @@ tty1 through xinit).  ``--windowed`` opens a normal window for development.
 """
 
 import json
+import os
 import random
+import shutil
 import signal
+import socket
+import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
 
 try:
-    from PyQt5.QtCore import (QObject, QRect, QRunnable, QSize, Qt, QThread, QThreadPool,
-                              QTimer, pyqtSignal, pyqtSlot)
-    from PyQt5.QtGui import (QColor, QFont, QFontDatabase, QImage, QLinearGradient,
-                             QPainter, QPixmap)
+    from PyQt5.QtCore import (QEvent, QObject, QRect, QRunnable, QSize, Qt, QThread,
+                              QThreadPool, QTimer, QSocketNotifier, pyqtSignal, pyqtSlot)
+    from PyQt5.QtGui import (QColor, QFont, QFontDatabase, QImage, QKeyEvent,
+                             QLinearGradient, QPainter, QPixmap)
     from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QFrame,
                                  QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                  QListWidgetItem, QPushButton, QSizePolicy, QSpinBox,
@@ -38,6 +42,7 @@ except ImportError:  # pragma: no cover - the message is the point
 API = "http://127.0.0.1"
 LOCAL_STATE = API + "/api/state"
 ARTWORK = API + "/api/airplay/artwork"
+REMOTE_SOCK = "/run/airxpi/remote.sock"
 
 CHANNELS = list(range(1, 14))
 COUNTRIES = ["", "IR", "TJ", "AF", "AE", "DE", "GB", "US", "TR", "RU", "IN",
@@ -241,6 +246,17 @@ class Keyboard(QDialog):
         self.target.setText("")
         self.preview.setText(self._render())
 
+    def keyPressFromRemote(self, key):
+        """Arrow/select/back from the TV remote while the keyboard is open."""
+        if key in ("up", "down", "left", "right"):
+            self.focusNextPrevChild(key in ("down", "right"))
+        elif key == "select":
+            widget = QApplication.focusWidget()
+            if isinstance(widget, QPushButton):
+                widget.click()
+        elif key == "back":
+            self.reject()
+
 
 # --------------------------------------------------------------------------
 # widgets
@@ -304,6 +320,9 @@ class AirXPiWindow(QWidget):
         self.art = None
         self.locations = []
         self._kb_target = None
+        self._tab = "airplay"
+        self.kb = None
+        self._unmuted = 40
 
         self.setWindowTitle("AirXPi")
         self.setObjectName("Root")
@@ -323,6 +342,8 @@ class AirXPiWindow(QWidget):
         clock.timeout.connect(self.update_clock)
         clock.start(1000)
         self.update_clock()
+
+        self._start_remote()
 
         if not windowed:
             self.showFullScreen()
@@ -858,6 +879,98 @@ class AirXPiWindow(QWidget):
         self.art_label.setPixmap(self.art.scaled(size, Qt.KeepAspectRatioByExpanding,
                                                  Qt.SmoothTransformation))
 
+    # -- HDMI-CEC remote ------------------------------------------------
+    def _start_remote(self):
+        """Listen on the unix socket the axcec daemon publishes key presses to."""
+        self.remote = None
+        self.remote_notifier = None
+        try:
+            if os.path.exists(REMOTE_SOCK):
+                os.unlink(REMOTE_SOCK)
+            os.makedirs(os.path.dirname(REMOTE_SOCK), exist_ok=True)
+            self.remote = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+            self.remote.setblocking(False)
+            self.remote.bind(REMOTE_SOCK)
+            os.chmod(REMOTE_SOCK, 0o666)
+        except OSError as exc:
+            sys.stderr.write("remote socket: %r\n" % (exc,))
+            self.remote = None
+            return
+        self.remote_notifier = QSocketNotifier(self.remote.fileno(), QSocketNotifier.Read, self)
+        self.remote_notifier.activated.connect(self._read_remote)
+
+    def _read_remote(self):
+        if self.remote is None:
+            return
+        while True:
+            try:
+                data = self.remote.recv(64)
+            except (BlockingIOError, InterruptedError):
+                return
+            except OSError:
+                return
+            if not data:
+                return
+            self.on_remote_key(data.decode("ascii", "ignore").strip())
+
+    def on_remote_key(self, key):
+        """Translate a CEC key into the UI, without stealing focus from dialogs."""
+        if self._kb_target is not None and self.kb.isVisible():
+            self.kb.keyPressFromRemote(key)
+            return
+        if key in ("up", "down"):
+            self.focusNextPrevChild(key == "down")
+        elif key in ("left", "right"):
+            order = ["airplay", "vpn", "wifi"]
+            index = order.index(self._tab) if self._tab in order else 0
+            self.set_tab(order[(index + (-1 if key == "left" else 1)) % len(order)])
+        elif key == "select":
+            widget = QApplication.focusWidget()
+            if isinstance(widget, QPushButton):
+                widget.click()
+            elif widget is not None:
+                QApplication.sendEvent(widget, QKeyEvent(QEvent.KeyPress, Qt.Key_Space, Qt.NoModifier))
+        elif key == "back":
+            self.set_tab("airplay")
+            self.setFocus()
+        elif key == "play_pause":
+            self.action("playpause")
+        elif key == "stop":
+            self.action("stop-play")
+        elif key == "next":
+            self.action("next")
+        elif key == "previous":
+            self.action("previous")
+        elif key == "volume_up":
+            self.change_volume(5)
+        elif key == "volume_down":
+            self.change_volume(-5)
+        elif key == "mute":
+            self.mute_toggle()
+
+    def mute_toggle(self):
+        volume = int((self.state.get("airplay") or {}).get("config", {}).get("volume") or 0)
+        if volume > 0:
+            self._unmuted = volume
+            self.change_volume(-volume)
+        else:
+            self.change_volume(getattr(self, "_unmuted", 40))
+
+    # -- boot splash ----------------------------------------------------
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not getattr(self, "_splash_done", False):
+            self._splash_done = True
+            QTimer.singleShot(1500, self._quit_splash)
+
+    def _quit_splash(self):
+        """Hand the screen over from plymouth once the first frame is painted."""
+        if shutil.which("plymouth"):
+            try:
+                subprocess.run(["plymouth", "quit"], check=False, timeout=10)
+            except (OSError, subprocess.SubprocessError):
+                pass
+
     def set_chip(self, label, text, on, warn=False):
         label.setText(text)
         label.setProperty("on", "true" if on and not warn else "false")
@@ -969,7 +1082,10 @@ class AirXPiWindow(QWidget):
 
     # -- on-screen editing ----------------------------------------------
     def _edit(self, target, password=False):
-        Keyboard(self, target, password=password).exec_()
+        # keep a reference: the TV remote drives the dialog while it is open
+        self.kb = Keyboard(self, target, password=password)
+        self.kb.exec_()
+        self.kb = None
 
     def _edit_name(self, event):
         self._edit(self.inp_name)

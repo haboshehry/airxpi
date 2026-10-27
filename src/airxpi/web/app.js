@@ -97,6 +97,7 @@ const I18N = {
     "sys.device": "Device",
     "sys.device_name": "Name",
     "sys.reboot": "Reboot appliance",
+    "sys.diag": "Download diagnostics",
     "sys.reboot_hint": "Stops AirPlay, the access point and the VPN tunnel for about 30 seconds.",
     "msg.saved": "Saved",
     "msg.applied": "Applied",
@@ -206,6 +207,7 @@ const I18N = {
     "sys.device": "دستگاه",
     "sys.device_name": "نام",
     "sys.reboot": "راه‌اندازی مجدد دستگاه",
+    "sys.diag": "دریافت گزارش عیب‌یابی",
     "sys.reboot_hint": "AirPlay، نقطه دسترسی و تونل VPN حدود ۳۰ ثانیه متوقف می‌شوند.",
     "msg.saved": "ذخیره شد",
     "msg.applied": "اعمال شد",
@@ -773,6 +775,15 @@ function bind() {
     const res = await api("/api/net/device", { name: $("device-name-input").value });
     toast(res.ok ? t("msg.saved") : (res.error || t("msg.failed")), !res.ok);
     refresh(true);
+  });
+
+  $("diag").addEventListener("click", async () => {
+    const res = await api("/api/diag", {});
+    const blob = new Blob([res.text || JSON.stringify(res, null, 2)], { type: "text/plain" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "airxpi-diagnostics.txt";
+    link.click();
   });
 
   $("reboot").addEventListener("click", async () => {

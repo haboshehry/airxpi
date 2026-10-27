@@ -1,0 +1,18 @@
+[Unit]
+Description=AirXPi HDMI-CEC remote bridge (TV remote -> HDMI UI)
+Documentation=https://github.com/haboshehry/airxpi
+After=axgui.service
+Wants=axgui.service
+
+[Service]
+Type=simple
+Environment=PYTHONPATH=/opt/airxpi/lib
+Environment=PYTHONUNBUFFERED=1
+RuntimeDirectory=airxpi
+RuntimeDirectoryMode=0755
+ExecStart=/usr/bin/python3 -m airxpi.axcec
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

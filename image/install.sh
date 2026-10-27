@@ -33,7 +33,8 @@ BASE_PKGS="python3 python3-pyqt5 alsa-utils avahi-daemon avahi-utils libnss-mdns
  fonts-dejavu-core fonts-noto-core
  xserver-xorg xserver-xorg-legacy xserver-xorg-video-fbdev xserver-xorg-input-libinput
  xinit x11-xserver-utils
- strongswan strongswan-swanctl libcharon-extra-plugins libstrongswan-extra-plugins"
+ strongswan strongswan-swanctl libcharon-extra-plugins libstrongswan-extra-plugins
+ plymouth plymouth-themes librsvg2-bin cec-utils openssh-server"
 
 BUILD_PKGS="git build-essential autoconf automake libtool pkg-config
  libasound2-dev libavahi-client-dev libssl-dev libsoxr-dev libplist-dev
@@ -153,7 +154,7 @@ cp -a "$SRC/vendor/vpnexit/vpnexit.py" "$PREFIX/vpnexit/vpnexit.py"
 cp -a "$SRC/vendor/vpnexit/web/." "$PREFIX/vpnexit/web/"
 
 install -m 0755 "$SRC/scripts/axgui-client" "$PREFIX/bin/axgui-client"
-install -m 0755 "$SRC/scripts/axp-sync-name" "$PREFIX/bin/axp-sync-name"
+install -m 0755 "$SRC/scripts/axp-bootstrap" "$PREFIX/bin/axp-bootstrap"
 install -m 0755 "$SRC/scripts/axp-audio" /usr/local/sbin/axp-audio
 install -m 0755 "$SRC/scripts/axp-passwd" /usr/local/sbin/axp-passwd
 install -m 0755 "$SRC/scripts/axp-doctor" /usr/local/sbin/axp-doctor
@@ -174,6 +175,9 @@ install -m 0644 "$SRC/systemd/axnet-apply.service" /etc/systemd/system/axnet-app
 install -m 0644 "$SRC/systemd/axpanel.service" /etc/systemd/system/axpanel.service
 install -m 0644 "$SRC/systemd/axplay.service" /etc/systemd/system/axplay.service
 install -m 0644 "$SRC/systemd/axgui.service" /etc/systemd/system/axgui.service
+install -m 0644 "$SRC/systemd/axcec.service" /etc/systemd/system/axcec.service
+install -m 0644 "$SRC/systemd/axp-splash-quit.service" /etc/systemd/system/axp-splash-quit.service
+install -m 0644 "$SRC/systemd/axp-splash-quit.timer" /etc/systemd/system/axp-splash-quit.timer
 install -m 0644 "$SRC/systemd/vpnexit-web.service" /etc/systemd/system/vpnexit-web.service
 install -m 0644 "$SRC/systemd/vpnexit-supervisor.service" /etc/systemd/system/vpnexit-supervisor.service
 if [ ! -f /lib/systemd/system/nqptp.service ] && [ ! -f /etc/systemd/system/nqptp.service ]; then
@@ -192,14 +196,16 @@ export PYTHONPATH="$PREFIX/lib"
 
 if [ ! -f "$CONFDIR/airxpi.json" ]; then
     /usr/bin/python3 - <<'PY'
-import secrets
 from airxpi import common
 
+# open network on purpose: the box is the appliance, not a router behind a
+# captive portal. A passphrase can be set in the panel at any time.
 cfg = common.config()
-cfg["wifi"]["passphrase"] = "".join(secrets.choice("abcdefghjkmnpqrstuvwxyz23456789") for _ in range(10))
 cfg["wifi"]["ssid"] = "AirXPi"
+cfg["wifi"]["passphrase"] = ""
+cfg["wifi"]["enabled"] = True
 common.save_config(cfg)
-print("    access point: AirXPi / %s" % cfg["wifi"]["passphrase"])
+print("    access point: AirXPi (open, 192.168.168.1)")
 PY
 fi
 
@@ -295,6 +301,62 @@ if [ -f "$BOOTCFG" ] && ! grep -q '^# --- AirXPi ---' "$BOOTCFG"; then
 fi
 
 # --------------------------------------------------------------------------
+# boot experience: quiet kernel, logo + progress bar, CEC, ssh
+# --------------------------------------------------------------------------
+say "boot splash"
+if command -v plymouth >/dev/null 2>&1 && command -v rsvg-convert >/dev/null 2>&1; then
+    THEME=/usr/share/plymouth/themes/airxpi
+    install -d "$THEME"
+    sed 's/#020202/#ffffff/g' "$SRC/assets/airxlogoWhite.svg" > "$THEME/logo.svg"
+    rsvg-convert -w 300 -h 300 "$THEME/logo.svg" -o "$THEME/logo.png"
+    printf '%s\n' '<svg xmlns="http://www.w3.org/2000/svg" width="560" height="8">' \
+        '<rect width="560" height="8" rx="4" fill="#1d2733"/></svg>' > "$THEME/bar_track.svg"
+    printf '%s\n' '<svg xmlns="http://www.w3.org/2000/svg" width="560" height="8">' \
+        '<rect width="WIDTH" height="8" rx="4" fill="#e9f2fb"/></svg>' > "$THEME/bar_fill.svg"
+    rsvg-convert "$THEME/bar_track.svg" -o "$THEME/bar_track.png"
+    step=0
+    while [ "$step" -le 20 ]; do
+        width=$((560 * step / 20))
+        [ "$width" -lt 8 ] && width=8
+        sed "s/WIDTH/$width/" "$THEME/bar_fill.svg" > "$THEME/frame.svg"
+        rsvg-convert "$THEME/frame.svg" -o "$THEME/bar_fill_$step.png"
+        step=$((step + 1))
+    done
+    rm -f "$THEME/frame.svg"
+    install -m 0644 "$SRC/config/plymouth/airxpi.plymouth" "$THEME/airxpi.plymouth"
+    install -m 0644 "$SRC/config/plymouth/airxpi.script" "$THEME/airxpi.script"
+    install -d /etc/plymouth
+    cat > /etc/plymouth/plymouthd.conf <<'PLYMOUTH'
+[Daemon]
+Theme=airxpi
+ShowDelay=0
+DeviceTimeout=8
+PLYMOUTH
+    # the splash stays up until the Qt window is painted: the GUI quits it, and
+    # axp-splash-quit.timer is the safety net if the UI never comes up
+    systemctl mask plymouth-quit.service plymouth-quit-wait.service >/dev/null 2>&1 || true
+    enable_unit axp-splash-quit.timer
+    echo "    plymouth theme installed"
+fi
+
+CMDLINE=/boot/firmware/cmdline.txt
+[ -f "$CMDLINE" ] || CMDLINE=/boot/cmdline.txt
+if [ -f "$CMDLINE" ]; then
+    line=$(tr -d '\n' < "$CMDLINE")
+    case " $line " in *" quiet "*) ;; *) line="quiet $line" ;; esac
+    case " $line " in *" splash "*) ;; *) line="$line splash" ;; esac
+    case " $line " in *" loglevel="*) ;; *) line="$line loglevel=0" ;; esac
+    case " $line " in *" logo.nologo"*) ;; *) line="$line logo.nologo" ;; esac
+    case " $line " in *" vt.global_cursor_default="*) ;; *) line="$line vt.global_cursor_default=0" ;; esac
+    printf '%s\n' "$line" > "$CMDLINE"
+    echo "    cmdline: $line"
+fi
+
+# sshd: enabled by default so the box can be maintained without a keyboard
+ssh-keygen -A >/dev/null 2>&1 || true
+enable_unit ssh.service
+
+# --------------------------------------------------------------------------
 # services
 # --------------------------------------------------------------------------
 say "services"
@@ -320,7 +382,7 @@ enable_any() {
 
 enable_unit dhcpcd.service
 enable_unit avahi-daemon.service
-for unit in axnet.service axpanel.service axplay.service axgui.service \
+for unit in axnet.service axpanel.service axplay.service axgui.service axcec.service \
             vpnexit-web.service vpnexit-supervisor.service; do
     enable_unit "$unit"
 done

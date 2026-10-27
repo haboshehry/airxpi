@@ -1,0 +1,6 @@
+[Unit]
+Description=AirXPi splash safety net (drop plymouth if the UI never started)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'if [ -e /run/plymouth/pid ]; then /usr/bin/plymouth quit || true; fi'

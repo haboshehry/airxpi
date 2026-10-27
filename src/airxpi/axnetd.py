@@ -152,16 +152,21 @@ def write_hostapd(cfg):
         "wmm_enabled=1",
         "ieee80211n=%d" % (1 if wifi.get("ieee80211n", True) else 0),
         "ignore_broadcast_ssid=%d" % (1 if wifi.get("hidden") else 0),
-        "wpa=2",
-        "wpa_key_mgmt=WPA-PSK",
-        "wpa_pairwise=CCMP",
-        "rsn_pairwise=CCMP",
-        "wpa_group_rekey=600",
-        "wpa_passphrase=%s" % psk,
         "macaddr_acl=0",
         "ap_isolate=0",
         "ieee80211d=%d" % (1 if wifi.get("country") else 0),
     ]
+    if psk:
+        # a configured passphrase means WPA2; no passphrase means an open network
+        at = lines.index("macaddr_acl=0")
+        lines[at:at] = [
+            "wpa=2",
+            "wpa_key_mgmt=WPA-PSK",
+            "wpa_pairwise=CCMP",
+            "rsn_pairwise=CCMP",
+            "wpa_group_rekey=600",
+            "wpa_passphrase=%s" % psk,
+        ]
     country = (wifi.get("country") or "").upper()
     if c.valid_country(country):
         lines.insert(lines.index("hw_mode=g"), "country_code=%s" % country)
@@ -298,7 +303,8 @@ def apply(cfg=None):
         write_dnsmasq(cfg)
 
         wifi = cfg["wifi"]
-        psk_ok = c.valid_psk(wifi.get("passphrase"))
+        psk = wifi.get("passphrase") or ""
+        psk_ok = c.valid_psk(psk) or psk == ""
         want_wifi = bool(wifi.get("enabled")) and psk_ok
         if want_wifi:
             changed = write_hostapd(cfg)
@@ -307,29 +313,27 @@ def apply(cfg=None):
                 c.run(["iw", "reg", "set", country], timeout=15)
             if not c.service_active("hostapd"):
                 c.run(["systemctl", "reset-failed", "hostapd"], timeout=15)
-                c.service("start", "hostapd")
+                c.service_async("start", "hostapd")
             elif changed:
                 # a config change needs a full restart; a plain re-apply must
                 # not drop the clients (every udev hotplug calls apply())
-                c.service("restart", "hostapd")
+                c.service_async("restart", "hostapd")
         else:
             if c.service_active("hostapd"):
-                c.service("stop", "hostapd")
+                c.service_async("stop", "hostapd")
 
         c.run(["systemctl", "reset-failed", "dnsmasq"], timeout=15)
         if c.service_active("dnsmasq"):
-            c.service("reload", "dnsmasq")
-            if c.run(["systemctl", "is-active", "dnsmasq"], timeout=10)[1].strip() != "active":
-                c.service("restart", "dnsmasq")
+            c.service("reload", "dnsmasq", timeout=15)
         else:
-            c.service("start", "dnsmasq")
+            c.service_async("start", "dnsmasq")
 
         nft_apply(cfg)
         if write_avahi(cfg):
-            c.service("restart", "avahi-daemon")
+            c.service_async("restart", "avahi-daemon")
 
         if dhcpcd_changed:
-            c.service("try-reload-or-restart", "dhcpcd")
+            c.service_async("try-reload-or-restart", "dhcpcd")
 
         state = snapshot(cfg)
         c.log("apply: wan=%s lan=%s/%s wifi=%s clients=%d" % (
@@ -514,8 +518,8 @@ def set_wifi(payload):
     if "passphrase" in payload:
         psk = str(payload.get("passphrase") or "")
         if psk and not c.valid_psk(psk):
-            errors.append("Passphrase must be 8-63 printable characters")
-        elif psk:
+            errors.append("Passphrase must be 8-63 characters, or empty for an open network")
+        else:
             wifi["passphrase"] = psk
     if "channel" in payload:
         if not c.valid_channel(payload.get("channel")):
@@ -539,8 +543,8 @@ def set_wifi(payload):
             errors.append("max_clients must be a number")
     if errors:
         return {"ok": False, "error": "; ".join(errors)}, cfg
-    if wifi.get("enabled") and not c.valid_psk(wifi.get("passphrase")):
-        return {"ok": False, "error": "set a passphrase before enabling the access point"}, cfg
+    if wifi.get("enabled") and (wifi.get("passphrase") or "") and not c.valid_psk(wifi["passphrase"]):
+        return {"ok": False, "error": "set a passphrase of 8-63 characters, or leave it empty"}, cfg
     c.save_config(cfg)
     apply(cfg)
     return {"ok": True, "wifi": snapshot(cfg)["wifi"]}, cfg

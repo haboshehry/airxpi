@@ -174,6 +174,17 @@ def service(action, unit, timeout=45):
     return run(["systemctl", action, unit], timeout=timeout)
 
 
+def service_async(action, unit):
+    """Ask systemd to change a unit and return immediately.
+
+    ``systemctl restart hostapd`` blocks until the job finishes, and a unit that
+    keeps failing (no wlan0, wrong driver, bad config) blocks for its whole start
+    timeout. That is what left axnet stuck in "activating" with the access point
+    down and every /api/net call refused.
+    """
+    return run(["systemctl", "--no-block", action, unit], timeout=15)
+
+
 def service_active(unit):
     rc, out = run(["systemctl", "is-active", unit], timeout=10)
     return out.strip() == "active"

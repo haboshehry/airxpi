@@ -9,12 +9,13 @@ Before=axpanel.service hostapd.service dnsmasq.service
 Type=simple
 Environment=PYTHONPATH=/opt/airxpi/lib
 Environment=PYTHONUNBUFFERED=1
-ExecStartPre=/usr/bin/python3 -m airxpi.axnetd apply
+# never let a slow systemd job keep the daemon from starting
+ExecStartPre=-/usr/bin/timeout 75 /usr/bin/python3 -m airxpi.axnetd apply
 ExecStart=/usr/bin/python3 -m airxpi.axnetd serve
 Restart=always
 RestartSec=4
-# axnetd configures interfaces, hostapd, dnsmasq and nftables
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
+# axnetd configures interfaces, nftables and service units
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_SYS_MODULE
 
 [Install]
 WantedBy=multi-user.target

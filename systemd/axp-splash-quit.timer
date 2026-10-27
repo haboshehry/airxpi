@@ -1,0 +1,10 @@
+[Unit]
+Description=AirXPi splash safety net timer
+
+[Timer]
+OnBootSec=75s
+AccuracySec=5s
+Unit=axp-splash-quit.service
+
+[Install]
+WantedBy=timers.target

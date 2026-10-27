@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+"""Post-start hook for axplay: keep the receiver in step with the appliance.
+
+Two things the upstream panel cannot know:
+
+* the device name belongs to ``/etc/airxpi/airxpi.json`` (``device.name``), so a
+  fresh image must not keep advertising "Zima AirPlay";
+* the AirPlay output must be the HDMI sink (``vc4hdmi`` on the Pi 3B). The panel
+  guesses from /proc/asound and picks the analogue "Headphones" PCM when it is
+  card 0, which is how a device with no speakers ends up silent.
+
+Both are applied through the panel's own API, so the change survives restarts and
+shows up in the web UI too. ``audio.device`` in the config pins a device
+explicitly (``auto`` = prefer HDMI).
+"""
+
+import json
+import sys
+import time
+import urllib.error
+import urllib.request
+
+from airxpi import common as c
+
+API = "http://127.0.0.1:%d" % c.AIRPLAY_PORT
+
+
+def call(path, payload=None, timeout=6):
+    data = json.dumps(payload).encode() if payload is not None else None
+    request = urllib.request.Request(
+        API + path, data=data, method="POST" if data else "GET",
+        headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8", "replace"))
+
+
+def wait_for_panel(deadline):
+    while time.time() < deadline:
+        try:
+            return call("/api/state")
+        except (urllib.error.URLError, OSError, ValueError):
+            time.sleep(1.0)
+    return None
+
+
+def main():
+    config = c.config()
+    wanted_name = (config.get("device", {}).get("name") or "AirXPi").strip()
+    wanted_device = (config.get("audio", {}).get("device") or "auto").strip()
+
+    state = wait_for_panel(time.time() + 40)
+    if state is None:
+        c.log("bootstrap: panel did not answer", tag="axplay")
+        return 0
+
+    current = state.get("config") or {}
+    devices = state.get("devices") or []
+    changes = {}
+
+    if wanted_name and current.get("name") != wanted_name:
+        changes["name"] = wanted_name
+
+    if wanted_device.lower() == "auto":
+        hdmi = [d for d in devices if d.get("hdmi")]
+        current_device = current.get("device") or ""
+        current_hdmi = any(d.get("value") == current_device and d.get("hdmi") for d in devices)
+        if hdmi and not current_hdmi:
+            changes["device"] = hdmi[0]["value"]
+    elif wanted_device and current.get("device") != wanted_device:
+        changes["device"] = wanted_device
+
+    if not changes:
+        c.log("bootstrap: name=%s device=%s already correct"
+              % (current.get("name"), current.get("device")), tag="axplay")
+        return 0
+
+    changes["force"] = True
+    try:
+        result = call("/api/config", changes, timeout=30)
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        c.log("bootstrap: %r" % (exc,), tag="axplay")
+        return 0
+    c.log("bootstrap: applied %s -> %s" % (json.dumps(changes), result), tag="axplay")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

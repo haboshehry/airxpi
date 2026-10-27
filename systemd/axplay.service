@@ -13,12 +13,10 @@ Environment=XDG_RUNTIME_DIR=/run/airxpi
 RuntimeDirectory=airxpi
 RuntimeDirectoryMode=0755
 ExecStart=/usr/bin/python3 /opt/airxpi/airplay2/main.py
-# keep the advertised receiver name in step with /etc/airxpi/airxpi.json
-ExecStartPost=-/usr/bin/python3 /opt/airxpi/bin/axp-sync-name
+# keep the advertised name and route the audio to HDMI
+ExecStartPost=-/usr/bin/python3 /opt/airxpi/bin/axp-bootstrap
 Restart=always
-RestartSec=3
-# AirPlay 2 timing wants realtime scheduling for nqptp/shairport
-Nice=-5
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
