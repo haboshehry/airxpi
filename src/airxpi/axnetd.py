@@ -262,7 +262,16 @@ def ensure_bridge(cfg):
     c.run(["ip", "link", "set", BRIDGE, "type", "bridge",
            "stp_state", "0", "forward_delay", "0", "mcast_snooping", "0"], timeout=15)
     c.run(["ip", "link", "set", BRIDGE, "up"], timeout=15)
-    c.run(["ip", "addr", "replace", "%s/%s" % (addr, prefix), "dev", BRIDGE], timeout=15)
+    # drop addresses a previous configuration left behind, otherwise the panel
+    # keeps reporting an address that no longer has a DHCP range behind it
+    wanted = "%s/%s" % (addr, prefix)
+    rc, out = c.run(["ip", "-4", "-o", "addr", "show", "dev", BRIDGE], timeout=10)
+    if rc == 0:
+        for line in out.splitlines():
+            match = re.search(r"inet (\d+\.\d+\.\d+\.\d+/\d+)", line)
+            if match and match.group(1) != wanted:
+                c.run(["ip", "addr", "del", match.group(1), "dev", BRIDGE], timeout=10)
+    c.run(["ip", "addr", "replace", wanted, "dev", BRIDGE], timeout=15)
 
     if lan.get("ethernet", True) and LAN_ETH in c.interfaces():
         c.run(["ip", "link", "set", LAN_ETH, "up"], timeout=15)
