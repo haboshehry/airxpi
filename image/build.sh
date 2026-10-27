@@ -31,6 +31,29 @@ prepare() {
         --exclude '.git' --exclude '.build' --exclude 'dist' \
         "$REPO_ROOT/" "$PIGEN/stage-airxpi/repo/"
 
+    # Debian's archive keys must be readable inside the rootfs before the first
+    # chroot apt run. With a foreign-architecture debootstrap (qemu) the keyring
+    # occasionally ends up missing, and every `apt-get update` then fails with
+    # NO_PUBKEY. Copy the host's current keyring into the image's first stage.
+    python3 - "$PIGEN" <<'PY'
+import pathlib
+import sys
+
+pigen = pathlib.Path(sys.argv[1])
+run = pigen / "stage0" / "00-configure-apt" / "00-run.sh"
+text = run.read_text()
+block = """# -- airxpi: make sure the Debian archive keyring is inside the rootfs
+install -m 644 /usr/share/keyrings/debian-archive-keyring.gpg "${ROOTFS_DIR}/usr/share/keyrings/" 2>/dev/null || true
+mkdir -p "${ROOTFS_DIR}/etc/apt/trusted.gpg.d"
+cp -f /etc/apt/trusted.gpg.d/debian-archive-*.asc "${ROOTFS_DIR}/etc/apt/trusted.gpg.d/" 2>/dev/null || true
+
+"""
+if "-- airxpi: make sure" not in text:
+    text = text.replace("on_chroot <<- \\EOF", block + "on_chroot <<- \\EOF", 1)
+    run.write_text(text)
+    print("stage0 keyring sync injected")
+PY
+
     # only the last stage exports an image
     for stage in stage0 stage1 stage2; do
         rm -f "$PIGEN/$stage/EXPORT_IMAGE" "$PIGEN/$stage/EXPORT_NOOBS"
@@ -58,6 +81,18 @@ EOF
 build() {
     [ "$(id -u)" = "0" ] || { echo "build needs root: sudo $0 build" >&2; exit 1; }
     prepare
+
+    # Foreign-architecture builds: pi-gen's dependency check looks for a binary
+    # called qemu-aarch64, while Debian ships qemu-aarch64-static (the
+    # qemu-user-binfmt package conflicts with qemu-user-static).
+    if ! arch-test -n arm64 >/dev/null 2>&1; then
+        for candidate in /usr/bin/qemu-aarch64-static /usr/local/bin/qemu-aarch64-static; do
+            if [ -x "$candidate" ] && [ ! -e /usr/local/bin/qemu-aarch64 ]; then
+                ln -sf "$candidate" /usr/local/bin/qemu-aarch64
+            fi
+        done
+    fi
+
     cd "$PIGEN"
     echo "==> running pi-gen (this takes 40-90 minutes on an x86 host)"
     ./build.sh
