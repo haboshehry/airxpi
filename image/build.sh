@@ -27,9 +27,11 @@ prepare() {
     rm -rf "$PIGEN/stage-airxpi"
     mkdir -p "$PIGEN/stage-airxpi"
     cp -a "$REPO_ROOT/image/stage-airxpi/." "$PIGEN/stage-airxpi/"
+    # pi-gen only executes sub-stage *directories* (00-airxpi/), so the sources
+    # travel inside it
     rsync -a --delete \
         --exclude '.git' --exclude '.build' --exclude 'dist' \
-        "$REPO_ROOT/" "$PIGEN/stage-airxpi/repo/"
+        "$REPO_ROOT/" "$PIGEN/stage-airxpi/00-airxpi/files/repo/"
 
     # Debian's archive keys must be readable inside the rootfs before the first
     # chroot apt run. With a foreign-architecture debootstrap (qemu) the keyring
