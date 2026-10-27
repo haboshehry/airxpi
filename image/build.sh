@@ -29,6 +29,7 @@ prepare() {
     cp -a "$REPO_ROOT/image/stage-airxpi/." "$PIGEN/stage-airxpi/"
     # pi-gen only executes sub-stage *directories* (00-airxpi/), so the sources
     # travel inside it
+    mkdir -p "$PIGEN/stage-airxpi/00-airxpi/files"
     rsync -a --delete \
         --exclude '.git' --exclude '.build' --exclude 'dist' \
         "$REPO_ROOT/" "$PIGEN/stage-airxpi/00-airxpi/files/repo/"
