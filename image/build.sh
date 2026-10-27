@@ -72,7 +72,7 @@ KEYRING
     # (and the failure) is irrelevant here.
     SYS_TWEAKS="$PIGEN/stage2/01-sys-tweaks/01-run.sh"
     if [ -f "$SYS_TWEAKS" ] && grep -q 'systemctl enable rpi-resize' "$SYS_TWEAKS"; then
-        sed -i 's|^[[:space:]]*systemctl enable rpi-resize[[:space:]]*$|\tsystemctl enable rpi-resize 2>/dev/null || true|' "$SYS_TWEAKS"
+        sed -i 's@^[[:space:]]*systemctl enable rpi-resize[[:space:]]*$@systemctl enable rpi-resize 2>/dev/null || true@' "$SYS_TWEAKS"
         echo "==> made the rpi-resize enable non-fatal"
     fi
 
