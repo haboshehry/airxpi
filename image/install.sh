@@ -1,4 +1,4 @@
-﻿#!/bin/sh
+#!/bin/sh
 # AirXPi installer - turns a plain Raspberry Pi OS Lite (Bookworm, 64-bit)
 # into the AirPlay 2 + VPN-exit appliance described in docs/ARCHITECTURE.md.
 #

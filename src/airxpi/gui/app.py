@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """AirXPi HDMI user interface.
 
 Full-screen PyQt5 application on the HDMI output of the Pi:

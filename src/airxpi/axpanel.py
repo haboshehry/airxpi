@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """axpanel - the single web control panel of the AirXPi appliance.
 
 It fronts three local services and adds the appliance-level pieces the stock
