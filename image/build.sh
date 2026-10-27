@@ -55,6 +55,17 @@ KEYRING
         echo "==> stage0 keyring sync injected"
     fi
 
+    # These Raspberry Pi utilities exist only in newer repositories; on the
+    # arm64 bookworm branch apt aborts with "Unable to locate package".
+    PKGS="$PIGEN/stage2/01-sys-tweaks/00-packages"
+    if [ -f "$PKGS" ] && grep -q 'rpi-swap' "$PKGS"; then
+        sed -i \
+            -e 's/^rpi-swap rpi-loop-utils$/# rpi-swap rpi-loop-utils: only in newer RPi repositories/' \
+            -e 's/rpi-usb-gadget //' \
+            "$PKGS"
+        echo "==> dropped packages that the bookworm arm64 repository lacks"
+    fi
+
     # only the last stage exports an image
     for stage in stage0 stage1 stage2; do
         rm -f "$PIGEN/$stage/EXPORT_IMAGE" "$PIGEN/$stage/EXPORT_NOOBS"
