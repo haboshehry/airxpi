@@ -41,13 +41,32 @@ when `usb*`, `enx*` or `eth1` appears, so plugging the phone in re-runs the plan
 | `interface` / `bridge` | `wlan0` / `br0` |
 | `hw_mode` / `channel` | `g` / 1-13 (2.4 GHz only on a Pi 3B) |
 | `ieee80211n` | 1 |
-| `wpa` / `wpa_key_mgmt` / `rsn_pairwise` | 2 / WPA-PSK / CCMP |
-| `country_code` | optional, also applied with `iw reg set` |
+| `wpa` / `wpa_key_mgmt` / `wpa_pairwise` / `rsn_pairwise` | 2 / WPA-PSK / CCMP / CCMP |
+| `ieee80211w` | 0 - PMF disabled, see below |
+| `ap_max_inactivity` / `disassoc_low_ack` | 600 / 0 - a sleeping phone is not a dead phone |
+| `country_code` + `ieee80211d` | optional; also applied with `iw reg set` |
 | `max_num_sta` | 1-64 |
 | `ignore_broadcast_ssid` | hidden network |
 
-The AP refuses to start without a passphrase of at least 8 characters. Applying a
-change restarts hostapd (clients reconnect in a few seconds).
+The AP refuses to start without a passphrase of at least 8 characters.
+
+Two details matter for "my phone cannot join":
+
+* **PMF.** hostapd's default for `ieee80211w` moved between releases. A WPA2
+  client that does not implement management-frame protection can fail the
+  handshake when the AP advertises it as required, so the generated config pins
+  it to `0`.
+* **Regulatory domain.** Without `country_code` the driver refuses channels
+  12/13 and radios in US/CA/MX/BR refuse the BSS; `axnetd` also clamps the
+  channel to 11 for those countries instead of writing a config hostapd will
+  reject.
+
+Applying a change is **asynchronous**: `POST /api/net/wifi` writes the config and
+starts a worker, the panel polls `net.apply` in `/api/state` (`step`, `error`,
+`running`). The worker validates the generated file with `hostapd -t` *before*
+restarting the unit, and waits at most 10 s for `systemctl is-active hostapd`.
+An invalid channel, a missing driver or a failed start therefore becomes an
+error message instead of a panel that spins forever.
 
 ## DHCP / DNS
 
@@ -109,6 +128,11 @@ postrouting:          oifname <uplink> meta mark 0x1a1 → snat to <assigned VIP
 Because packets from bridged clients enter the local IP stack with `iifname br0`,
 one rule covers `eth1` **and** `wlan0`. `charon` runs with `install_routes = no`
 and `install_virtual_ip = no` (`/etc/strongswan.d/vpnexit.conf`).
+
+Personal profiles (`axtunnel`, see [VPN.md](VPN.md)) use the same shape with a
+second mark: `0x1a2` and table `418`, `masquerade` on the tunnel interface (or
+`snat ip to <VIP>` on the uplink for manual IKEv2). The two engines are mutually
+exclusive: a connect in either one tears the other down first.
 
 What stays outside the tunnel: the box's own traffic that is not LAN-forwarded, the
 IKE/ESP packets themselves, and the destinations in `vpnexit`'s exclude set

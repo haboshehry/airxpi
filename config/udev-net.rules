@@ -1,3 +1,4 @@
-# AirXPi: re-apply the network plan when a phone starts or stops sharing over USB.
-ACTION=="add|change", SUBSYSTEM=="net", KERNEL=="usb*|enx*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="axnet-apply.service"
-ACTION=="add|change", SUBSYSTEM=="net", KERNEL=="eth1", TAG+="systemd", ENV{SYSTEMD_WANTS}+="axnet-apply.service"
+# AirXPi: re-apply the network plan when a phone or LTE stick starts or stops
+# sharing over USB.  Raspberry Pi OS gives these devices predictable names
+# (eth2/eth3), so matching only usb*/enx* missed every tethered phone.
+ACTION=="add|change", SUBSYSTEM=="net", KERNEL!="lo|br0|wlan0", TAG+="systemd", ENV{SYSTEMD_WANTS}+="axnet-apply.service"

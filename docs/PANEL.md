@@ -25,8 +25,8 @@ to restrict it to `br0` only.
 |---|---|
 | **Dashboard** | cover art, title/artist/album, transport, volume, VPN/AP/uplink cards, client table |
 | **AirPlay** | name, output PCM (HDMI marked ✓), sync delay, optional password, test tone, restart, service state and log |
-| **VPN** | current state and exit address, searchable location list, connect/disconnect, *Verify exit*, tunnel settings (share LAN / block IPv6 / auto reconnect) |
-| **Wi-Fi** | SSID, passphrase, channel 1-13, regulatory country, max clients, hidden SSID, on/off - plus live AP state and LAN addressing |
+| **VPN** | current state and exit address, searchable location list, connect/disconnect, *Verify exit*, tunnel settings (share LAN / block IPv6 / auto reconnect) - and **My VPN profiles**: manual IKEv2, WireGuard, AmneziaWG, VLESS + REALITY, OpenVPN, L2TP/IPsec, SSTP (fields or uploaded config), see [VPN.md](VPN.md) |
+| **Wi-Fi** | SSID, passphrase, channel 1-13, regulatory country, max clients, hidden SSID, on/off - plus live AP state, LAN addressing and an **access point troubleshooting** card (`hostapd -t`, regulatory domain, rfkill, hostapd journal, restart) |
 | **Network** | uplink mode (auto / eth0 / USB tethering), active uplink, detected interfaces, addressing |
 | **System** | model, kernel, uptime, temperature, memory, storage, service states, panel password, device name, reboot |
 
@@ -35,6 +35,7 @@ to restrict it to `br0` only.
 ```
 browser ──password──► axpanel :80 ──┬── :8090  airxplay2   (AirPlay)
                                     ├── :8088  vpnexit     (X-Auth-Token, injected server side)
+                                    ├── :8086  axtunnel    (personal VPN profiles)
                                     └── :8079  axnetd      (wireless, uplink, clients)
 ```
 
@@ -63,8 +64,8 @@ Persian text needs `fonts-noto-core` (installed) and the UI switches `dir="rtl"`
 
 ## Security notes
 
-* Only `:80` is reachable from the LAN; `8079`, `8088` and `8090` are dropped by
-  nftables on non-loopback interfaces.
+* Only `:80` is reachable from the LAN; `8079`, `8086`, `8088` and `8090` are
+  dropped by nftables on non-loopback interfaces.
 * The panel runs as root because it configures hostapd/dnsmasq through `axnetd` and
   reads the vpnexit token. It never executes a shell with user input: all engine
   calls are JSON over loopback, and `axnetd` writes config files from validated

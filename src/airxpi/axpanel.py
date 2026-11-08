@@ -165,12 +165,17 @@ def vpn_call(endpoint, payload=None, timeout=20):
     return http_json(url, payload, {"X-Auth-Token": token}, timeout)
 
 
-def net_call(endpoint, payload=None):
-    return http_json("http://127.0.0.1:%d/%s" % (c.AXNET_PORT, endpoint), payload, None, 30)
+def net_call(endpoint, payload=None, timeout=30):
+    return http_json("http://127.0.0.1:%d/%s" % (c.AXNET_PORT, endpoint), payload, None, timeout)
 
 
 def airplay_call(endpoint, payload=None, timeout=8):
     return http_json("http://127.0.0.1:%d/api/%s" % (c.AIRPLAY_PORT, endpoint), payload, None, timeout)
+
+
+def tunnel_call(endpoint, payload=None, timeout=20):
+    """axtunnel (manual WireGuard / VLESS / OpenVPN / ... profiles)."""
+    return http_json("http://127.0.0.1:%d/%s" % (c.TUNNEL_PORT, endpoint), payload, None, timeout)
 
 
 # --------------------------------------------------------------------------
@@ -219,8 +224,9 @@ def system_info():
 
 
 def services_health():
-    units = ["axnet", "axpanel", "axplay", "axgui", "vpnexit-web",
-             "vpnexit-supervisor", "hostapd", "dnsmasq", "avahi-daemon", "shairport-sync"]
+    units = ["axnet", "axpanel", "axplay", "axgui", "axtunnel", "vpnexit-web",
+             "vpnexit-supervisor", "hostapd", "dnsmasq", "avahi-daemon",
+             "nqptp", "shairport-sync"]
     result = {}
     for unit in units:
         rc, out = c.run(["systemctl", "is-active", unit], timeout=5)
@@ -228,6 +234,12 @@ def services_health():
         if not state or "systemd" in state or "Failed to connect" in state:
             state = "unknown"
         result[unit] = state
+    # shairport-sync is masked on purpose: axplay owns the one allowed
+    # instance.  Reporting "inactive" for it made the receiver look broken.
+    if result.get("shairport-sync") != "active":
+        rc, out = c.run(["pgrep", "-f", "shairport-sync"], timeout=5)
+        if rc == 0 and out.strip():
+            result["shairport-sync"] = "active (axplay)"
     return result
 
 
@@ -341,6 +353,19 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, vpn_call("log?lines=120"))
         if path == "/api/net/state":
             return self._send(200, net_call("state"))
+        if path == "/api/net/diag":
+            return self._send(200, net_call("diag", None, 40))
+        if path == "/api/tunnel/state":
+            return self._send(200, tunnel_call("state", None, 30))
+        if path == "/api/tunnel/profiles":
+            return self._send(200, tunnel_call("profiles"))
+        if path == "/api/tunnel/capabilities":
+            return self._send(200, tunnel_call("capabilities"))
+        if path == "/api/tunnel/log":
+            return self._send(200, tunnel_call("log"))
+        if path == "/api/tunnel/profile":
+            wanted = (query.get("id") or [""])[0]
+            return self._send(200, tunnel_call("profile?id=%s" % urllib.parse.quote(wanted)))
         if path == "/api/system":
             return self._send(200, {"ok": True, "system": system_info(), "services": services_health()})
         return self._send(404, {"ok": False, "error": "not found"})
@@ -378,6 +403,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/airplay/action":
             return self._engine(airplay_call("action", body, 90))
         if path == "/api/vpn/connect":
+            # the feed exit and a personal profile both steer the LAN; only
+            # one of them may be up at a time
+            tunnel_call("disconnect", {}, 30)
             return self._engine(vpn_call("connect", body, 60))
         if path == "/api/vpn/disconnect":
             return self._engine(vpn_call("disconnect", body, 60))
@@ -385,6 +413,20 @@ class Handler(BaseHTTPRequestHandler):
             return self._engine(vpn_call("refresh", {}, 90))
         if path == "/api/vpn/selftest":
             return self._engine(vpn_call("selftest", {}, 60))
+        if path == "/api/tunnel/profile":
+            return self._engine(tunnel_call("profile", body, 40))
+        if path == "/api/tunnel/profile/delete":
+            return self._engine(tunnel_call("profile/delete", body, 40))
+        if path == "/api/tunnel/connect":
+            return self._engine(tunnel_call("connect", body, 30))
+        if path == "/api/tunnel/disconnect":
+            return self._engine(tunnel_call("disconnect", body, 40))
+        if path == "/api/tunnel/selftest":
+            return self._engine(tunnel_call("selftest", body, 45))
+        if path == "/api/tunnel/settings":
+            return self._engine(tunnel_call("settings", body, 30))
+        if path == "/api/net/ap/restart":
+            return self._engine(net_call("ap/restart", body, 60))
         if path == "/api/net/wifi":
             return self._engine(net_call("wifi", body))
         if path == "/api/net/wan":
@@ -466,7 +508,13 @@ def diagnostics():
         ("alsa", ["aplay", "-l"]),
         ("alsa routes", ["amixer", "-c", "0", "scontents"]),
         ("services", ["systemctl", "is-active", "axnet", "axpanel", "axplay", "axgui",
-                      "axcec", "hostapd", "dnsmasq", "avahi-daemon", "ssh"]),
+                      "axcec", "axtunnel", "vpnexit-web", "hostapd", "dnsmasq",
+                      "avahi-daemon", "nqptp", "ssh"]),
+        ("tunnel state", ["sh", "-c", "curl -fsS --max-time 5 http://127.0.0.1:8086/state || echo unavailable"]),
+        ("tunnel log", ["tail", "-n", "30", "/var/log/airxpi/tunnel.log"]),
+        ("nqptp", ["systemctl", "status", "nqptp", "--no-pager", "-n", "6"]),
+        ("shairport log", ["tail", "-n", "40", "/var/lib/airxpi/airplay2/shairport.log"]),
+        ("shairport version", ["sh", "-c", "shairport-sync -V 2>&1 | head -n 2"]),
         ("journal axnet", ["journalctl", "-u", "axnet", "-n", "40", "--no-pager"]),
         ("journal axgui", ["journalctl", "-u", "axgui", "-n", "25", "--no-pager"]),
         ("journal axplay", ["journalctl", "-u", "axplay", "-n", "25", "--no-pager"]),
@@ -491,9 +539,14 @@ def build_state():
     airplay_f = POOL.submit(airplay_call, "state")
     vpn_f = POOL.submit(vpn_call, "status")
     net_f = POOL.submit(net_call, "state")
+    tunnel_f = POOL.submit(tunnel_call, "state", None, 15)
     airplay = airplay_f.result()
     vpn = vpn_f.result()
     net = net_f.result()
+    try:
+        tunnel = tunnel_f.result()
+    except Exception:  # noqa: BLE001
+        tunnel = {"ok": False, "error": "axtunnel unavailable"}
 
     # the receiver reports every playback PCM with connected=None; mark them and
     # flag the HDMI ones so both front-ends can show where the sound goes
@@ -518,6 +571,12 @@ def build_state():
             "location": vpn_status.get("location", {}),
         },
         "net": (net or {}).get("state", {}),
+        "tunnel": {
+            "ok": bool(tunnel.get("ok")),
+            "status": tunnel.get("status") or {},
+            "profiles": tunnel.get("profiles") or [],
+            "error": tunnel.get("error", "") if not tunnel.get("ok") else "",
+        },
         "system": system_info(),
     }
 

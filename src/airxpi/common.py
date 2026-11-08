@@ -24,10 +24,12 @@ LOG_DIR = "/var/log/airxpi"
 AXNET_CONF = os.path.join(CONF_DIR, "airxpi.json")
 PANEL_CONF = os.path.join(CONF_DIR, "panel.json")
 VPN_CONF = "/etc/vpnexit/config.json"
+TUNNEL_CONF = os.path.join(CONF_DIR, "tunnels.json")
 
 AIRPLAY_PORT = 8090
 VPN_PORT = 8088
 AXNET_PORT = 8079
+TUNNEL_PORT = 8086
 
 PANEL_PORT = 80
 
@@ -64,6 +66,11 @@ DEFAULTS = {
     },
     "airplay": {
         "name": "AirXPi",
+    },
+    # "auto" lets axp-bootstrap prefer the HDMI PCM; an explicit
+    # plughw:CARD=...,DEV=... pins one output.
+    "audio": {
+        "device": "auto",
     },
     "panel": {
         "wan_access": True,
@@ -267,12 +274,51 @@ def interfaces():
     return result
 
 
+# Drivers used by phones and LTE sticks when they appear as an Ethernet-like
+# netdev.  Raspberry Pi OS uses *predictable* names, so an iPhone or an Android
+# phone shows up as eth2/eth3 - not usb0/enx* - and a name-only check silently
+# dropped it from every uplink list (that is why USB tethering "did nothing").
+USB_NET_DRIVERS = {
+    "cdc_ether", "cdc_ncm", "cdc_mbim", "cdc_subset", "ipheth", "rndis_host",
+    "qmi_wwan", "huawei_cdc_ncm", "usbnet", "asix",
+}
+
+
+def iface_driver(name):
+    try:
+        link = os.readlink("/sys/class/net/%s/device/driver" % name)
+        return os.path.basename(link)
+    except OSError:
+        return ""
+
+
+def bridge_members(bridge="br0"):
+    try:
+        return sorted(os.listdir("/sys/class/net/%s/brif" % bridge))
+    except OSError:
+        return []
+
+
+def is_usb_net(name):
+    if name.startswith(("usb", "enx")):
+        return True
+    return iface_driver(name) in USB_NET_DRIVERS
+
+
 def iface_kind(name):
     if name == "br0":
         return "bridge"
+    if name == "lo":
+        return "loopback"
     if name.startswith(("wlan", "wlp")):
         return "wifi"
-    if name.startswith(("usb", "enx")):
+    if name.startswith(("wwan", "wwp")):
+        return "wwan"
+    # the onboard NIC and the LAN port are USB devices on a Pi, but they are
+    # not tethering interfaces
+    if name in ("eth0", config().get("lan", {}).get("iface") or "eth1"):
+        return "ethernet"
+    if is_usb_net(name):
         return "usb"
     if name.startswith(("eth", "enp", "eno")):
         return "ethernet"
@@ -284,11 +330,27 @@ def usb_net_ifaces():
 
 
 def wan_candidates():
-    """Interfaces that may carry the internet uplink, best first."""
+    """Interfaces that may carry the internet uplink, best first.
+
+    Anything that is not the LAN bridge, its member port, the AP radio or
+    loopback is fair game: the Pi happily names a tethered phone ``eth2``.
+    """
     found = interfaces()
-    ethernet = [n for n in ("eth0",) if n in found]
-    usb = [n for n, v in found.items() if v["kind"] == "usb"]
-    return {"ethernet": ethernet, "usb": sorted(usb)}
+    lan_port = config().get("lan", {}).get("iface") or "eth1"
+    skip = {"lo", "br0", "wlan0", lan_port}
+    skip.update(bridge_members("br0"))
+    ethernet, usb = [], []
+    for name in sorted(found):
+        if name in skip or name.startswith(("wlan", "wlp")):
+            continue
+        kind = found[name]["kind"]
+        if name == "eth0":
+            ethernet.insert(0, name)
+        elif kind == "usb":
+            usb.append(name)
+        elif kind in ("ethernet", "wwan"):
+            ethernet.append(name)
+    return {"ethernet": ethernet, "usb": usb}
 
 
 def default_route():

@@ -8,8 +8,13 @@ Type=simple
 ExecStart=/usr/local/bin/nqptp
 Restart=always
 RestartSec=2
-CapabilityBoundingSet=CAP_SYS_NICE
-AmbientCapabilities=CAP_SYS_NICE
+# nqptp listens on UDP 319 and 320, the standard PTP event/general ports, and
+# needs a realtime thread for AirPlay 2 timing.  CAP_NET_BIND_SERVICE is what
+# lets it bind those ports; without it the daemon dies with "can't bind to port
+# 319" and shairport-sync silently degrades to classic AirPlay - which looks
+# exactly like "AirPlay 2 does not work and there is no sound".
+AmbientCapabilities=CAP_SYS_NICE CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_SYS_NICE CAP_NET_BIND_SERVICE
 
 [Install]
 WantedBy=multi-user.target

@@ -1,0 +1,21 @@
+[Unit]
+Description=AirXPi personal VPN profiles (manual IKEv2, WireGuard, Amnezia, VLESS, OpenVPN, L2TP, SSTP)
+Documentation=https://github.com/haboshehry/airxpi
+After=network-online.target axnet.service strongswan-starter.service vpnexit-web.service
+Wants=network-online.target axnet.service strongswan-starter.service
+
+[Service]
+Type=simple
+Environment=PYTHONPATH=/opt/airxpi/lib
+Environment=PYTHONUNBUFFERED=1
+# the API and the watchdog live in one process: a separate ExecStartPost
+# supervisor would keep the unit "activating" until its own timeout
+ExecStart=/usr/bin/python3 -m airxpi.axtunnel serve
+Restart=always
+RestartSec=5
+# nftables, ip rules, tunnel interfaces and strongSwan/swanctl control
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_SYS_MODULE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+
+[Install]
+WantedBy=multi-user.target

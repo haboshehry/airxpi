@@ -12,9 +12,12 @@ printf 'uptime  : %s\n' "$(cut -d. -f1 /proc/uptime) s"
 printf 'temp    : %s C\n' "$(awk '{printf "%.1f", $1/1000}' /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo n/a)"
 
 line "services"
-for unit in axnet axpanel axplay axgui vpnexit-web vpnexit-supervisor hostapd dnsmasq avahi-daemon nqptp; do
+for unit in axnet axpanel axplay axgui axtunnel vpnexit-web vpnexit-supervisor hostapd dnsmasq avahi-daemon nqptp shairport-sync; do
     printf '%-20s %s\n' "$unit" "$(systemctl is-active "$unit" 2>/dev/null || true)"
 done
+printf '%-20s %s\n' "shairport (axplay)" "$(pgrep -f shairport-sync >/dev/null 2>&1 && echo running || echo stopped)"
+printf '%-20s %s\n' "nqptp shm" "$([ -e /dev/shm/nqptp ] && echo present || echo missing)"
+printf '%-20s %s\n' "shairport build" "$(shairport-sync -V 2>/dev/null | head -n1 || echo missing)"
 
 line "audio"
 if have aplay; then
@@ -32,9 +35,25 @@ printf 'default route: %s\n' "$(ip -4 route show default | head -n1)"
 printf 'hostapd       : %s\n' "$(systemctl is-active hostapd 2>/dev/null)"
 printf 'stations      : %s\n' "$(iw dev wlan0 station dump 2>/dev/null | grep -c '^Station' || echo 0)"
 
+line "access point"
+if have hostapd; then
+    hostapd -t -c /etc/hostapd/hostapd.conf 2>&1 | tail -n 3
+else
+    echo "hostapd missing"
+fi
+iw reg get 2>/dev/null | head -n 5
+rfkill list wlan 2>/dev/null | head -n 4
+journalctl -u hostapd -b -n 8 --no-pager 2>/dev/null
+
 line "vpn"
 /usr/local/sbin/vpnexit status 2>/dev/null | head -c 1200 || echo "vpnexit not installed"
 printf '\n'
+curl -fsS --max-time 5 http://127.0.0.1:8086/state 2>/dev/null \
+    | python3 -c 'import json,sys
+s=json.load(sys.stdin)["status"]
+print("axtunnel :", s["state"], s.get("protocol") or "-", s.get("device") or "-")
+print("exit     :", s.get("exit_ip") or "-", "| routing", s["routing"]["active"])
+print("error    :", s.get("error") or "-")' 2>/dev/null || echo "axtunnel not answering on :8086"
 
 line "airplay"
 curl -fsS --max-time 5 http://127.0.0.1:8090/api/state 2>/dev/null \

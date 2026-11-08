@@ -1,0 +1,30 @@
+#!/bin/sh
+# Ship the AirXPi plymouth theme inside the initramfs.
+#
+# Plymouth starts from the initramfs and keeps that theme until the root
+# switch; if the theme directory is not copied here the default text theme is
+# what the user sees for the whole boot, which is why the progress bar never
+# appeared even though the theme was correct in the rootfs.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in
+    prereqs) prereqs; exit 0 ;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+THEME_SRC=/usr/share/plymouth/themes/airxpi
+THEME_DST="${DESTDIR}/usr/share/plymouth/themes/airxpi"
+
+if [ -d "$THEME_SRC" ]; then
+    mkdir -p "$THEME_DST"
+    cp -a "$THEME_SRC"/. "$THEME_DST"/
+    touch "${DESTDIR}/usr/share/plymouth/themes/.airxpi"
+fi
+
+if [ -f /etc/plymouth/plymouthd.conf ]; then
+    mkdir -p "${DESTDIR}/etc/plymouth"
+    cp -a /etc/plymouth/plymouthd.conf "${DESTDIR}/etc/plymouth/plymouthd.conf"
+fi
+
+exit 0

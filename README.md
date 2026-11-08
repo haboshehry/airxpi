@@ -5,8 +5,10 @@ AirPlay 2 receiver **and** a VPN exit gateway at the same time:
 
 * **AirPlay 2 receiver** on the Linux kernel, with the cover art, track info and the
   playback settings drawn on the **HDMI output** (the same screen the TV shows).
-* **VPN exit** for every client of the box: the tunnel is taken from
-  `vpnexit` (IKEv2 / strongSwan) and shared to the LAN.
+* **VPN exit** for every client of the box: either the ready-made IKEv2 feed
+  from `vpnexit`, or **your own profile** - manual IKEv2, WireGuard, AmneziaWG,
+  VLESS + REALITY, OpenVPN, L2TP/IPsec or SSTP, configured by hand or uploaded
+  as a file, and shared to the whole access point.
 * **Internet uplink** from `eth0` **or** from a phone that shares its connection
   over USB (iPhone `ipheth`, Android `rndis`/`cdc_ether`).
 * **LAN side**: `eth1` (USB Ethernet adapter) and the on-board Wi-Fi access point,
@@ -35,6 +37,7 @@ AirPlay 2 receiver **and** a VPN exit gateway at the same time:
 |---|---|---|
 | `axplay` | [`airxplay2`](https://github.com/haboshehry/airxplay2) (vendored) | supervises `shairport-sync`, reads AirPlay metadata/artwork, D-Bus volume |
 | `vpnexit` | `vpnexit-openwrt/portable` (vendored) | downloads the daily IKEv2 feed, connects, steers LAN traffic, verifies the exit address |
+| `axtunnel` | this repo | personal profiles (manual IKEv2, WireGuard, AmneziaWG, VLESS + REALITY, OpenVPN, L2TP/IPsec, SSTP): store, adapters, policy routing, selftest |
 | `axnetd` | this repo | uplink detection, `br0` bridge, hostapd AP, dnsmasq, nftables NAT, localhost API |
 | `axpanel` | this repo | the single web panel (auth, AirPlay + VPN + Wi-Fi + system), port 80 |
 | `axgui` | this repo | full-screen PyQt5 UI on HDMI: cover art, transport, volume, settings tabs |
@@ -98,7 +101,7 @@ The installer is idempotent and keeps `/etc/airxpi/airxpi.json`,
 
 ## Panel API
 
-The panel is a thin, authenticated front-end over three local services. Scripts can
+The panel is a thin, authenticated front-end over four local services. Scripts can
 use the same endpoints with the panel's API token (`/etc/airxpi/panel.json`):
 
 ```bash
@@ -116,7 +119,8 @@ curl -s -H "X-Auth-Token: $TOKEN" -H 'Content-Type: application/json' \
 | `/api/airplay/{config,volume,action}` | POST | receiver settings, volume, transport/test |
 | `/api/airplay/artwork` | GET | current cover art |
 | `/api/vpn/{locations,status,settings,connect,disconnect,refresh,selftest}` | GET/POST | exit switching |
-| `/api/net/{state,wifi,wan,lan,device}` | GET/POST | wireless, uplink, LAN, device name/language |
+| `/api/tunnel/{state,profiles,profile,capabilities,connect,disconnect,selftest,settings,log}` | GET/POST | personal VPN profiles ([docs/VPN.md](docs/VPN.md)) |
+| `/api/net/{state,wifi,wan,lan,device,diag,ap/restart}` | GET/POST | wireless, uplink, LAN, device name/language, AP diagnostics |
 | `/api/system` | GET | kernel, temperature, memory, disk, service states |
 | `/api/system/{password,reboot}` | POST | credentials, reboot |
 
@@ -128,21 +132,27 @@ axp-audio list        # playback PCMs, HDMI marked
 axp-audio hdmi        # select the HDMI PCM and route the mixer
 axp-audio test        # 2 s tone on the selected output
 axp-passwd            # new random panel password (also written to the boot partition)
-vpnexit status        # tunnel state as JSON
+vpnexit status        # feed tunnel state as JSON
 vpnexit locations
 vpnexit selftest      # verifies the exit address, not just the tunnel
+python3 -m airxpi.axtunnel state        # personal profiles + capabilities
+python3 -m airxpi.axtunnel connect ID   # profile id from the panel / state
+python3 -m airxpi.axtunnel selftest
 ```
 
 ## Security model
 
 * The web panel is password protected (PBKDF2-SHA256, 12 h signed session cookie,
   optional `X-Auth-Token` for scripts). The API is reachable only through the panel;
-  `8090`, `8088` and `8079` are dropped by nftables on every non-loopback interface.
+  `8090`, `8088`, `8086` and `8079` are dropped by nftables on every non-loopback interface.
 * `vpnexit`'s own panel keeps its random token and is never exposed to the LAN.
-* IPv6 is disabled: the tunnel carries IPv4 only, so IPv6 on the LAN would be a leak.
+* Personal profiles live in `/etc/airxpi/tunnels.json` (0600) and their uploaded
+  files in `/etc/airxpi/tunnels/` (0600); the panel never sends a stored secret
+  back to the browser.
+* IPv6 is disabled: the tunnels carry IPv4 only, so IPv6 on the LAN would be a leak.
 * The access point is WPA2-PSK (CCMP) and refuses to start without a valid passphrase.
-* `vpnexit` traffic is excluded from the appliance SNAT rule, so marked packets keep
-  the address the peer assigned.
+* `vpnexit`/`axtunnel` traffic is excluded from the appliance SNAT rule, so marked
+  packets keep the address the tunnel assigned.
 
 ## Status and known limits
 
@@ -151,22 +161,34 @@ vpnexit selftest      # verifies the exit address, not just the tunnel
   a Pi 3B is still required** - after flashing, `axp-doctor` is the first thing to run.
 * Raspberry Pi 3B Wi-Fi is **2.4 GHz only** (channels 1-13, 802.11n).
 * One USB tether at a time; `eth0` always wins in `auto` mode.
-* VPN profiles are IKEv2 only (that is what the `vpnexit` feed provides).
+* The `vpnexit` **feed** is IKEv2 only. Personal profiles add manual IKEv2,
+  WireGuard, AmneziaWG, VLESS + REALITY, OpenVPN, L2TP/IPsec and SSTP - one
+  active tunnel at a time, shared with the LAN.
+* AmneziaWG needs a kernel module Debian does not ship; the panel reports the
+  protocol as unavailable until `amneziawg-tools` and the module are built for
+  the running kernel. `sing-box` is installed by the installer when GitHub is
+  reachable.
 * AirPlay 2 group playback needs exactly one `shairport-sync` and one `nqptp`; the
-  installer masks the distribution unit and `axplay` owns the process.
+  installer masks the distribution unit and `axplay` owns the process. `nqptp`
+  needs `CAP_NET_BIND_SERVICE` because it owns UDP 319/320 - the shipped unit
+  grants it.
 
 ## Build details
 
 See [docs/BUILD.md](docs/BUILD.md). Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 Networking: [docs/NETWORK.md](docs/NETWORK.md). Panel: [docs/PANEL.md](docs/PANEL.md).
-HDMI UI: [docs/GUI.md](docs/GUI.md). Troubleshooting: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+VPN profiles: [docs/VPN.md](docs/VPN.md). HDMI UI: [docs/GUI.md](docs/GUI.md).
+Troubleshooting: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 ## خلاصه فارسی
 
 این مخزن یک سیستم‌عامل کامل برای رزبری‌پای ۳B می‌سازد: گیرنده AirPlay 2 روی کرنل لینوکس
 با نمایش کاور آهنگ و تنظیمات روی خروجی HDMI، به‌همراه vpnexit که تونل VPN را از
 اینترنت eth0 یا اشتراک USB آیفون/اندروید می‌گیرد و آن را روی eth1 و وای‌فای (hostapd)
-به اشتراک می‌گذارد. یک پنل وب واحد (پورت ۸۰) هم وضعیت/انتخاب VPN و هم تنظیمات وایرلس و
+به اشتراک می‌گذارد. علاوه بر فهرست آماده، در تب VPN می‌توانید پروفایل شخصی بسازید:
+IKEv2 دستی، WireGuard، AmneziaWG، VLESS + REALITY، OpenVPN، L2TP/IPsec و SSTP؛
+با فیلد یا آپلود فایل، و تونل به‌صورت خودکار با کلاینت‌های شبکه به اشتراک گذاشته می‌شود.
+یک پنل وب واحد (پورت ۸۰) هم وضعیت/انتخاب VPN و هم تنظیمات وایرلس و
 AirPlay را مدیریت می‌کند؛ روی HDMI هم کنار صفحه پخش، تنظیمات AirPlay/VPN/Wi-Fi دیده
 می‌شود. برای ساخت ایمیج: `sudo ./image/build-in-docker.sh` و سپس نوشتن فایل
 `dist/airxpi-*.img.xz` روی کارت حافظه.

@@ -12,6 +12,7 @@ firmware (start4/start.elf) → Linux kernel (Debian bookworm arm64, RPi kernel)
       ├─ axplay            vendored airxplay2: supervises shairport-sync, :8090
       ├─ vpnexit-supervisor  tunnel watchdog + daily profile refresh
       ├─ vpnexit-web        vpnexit JSON API :8088 (token)
+      ├─ axtunnel           personal VPN profiles :8086 (loopback) + watchdog
       ├─ axpanel           the single web panel :80 (auth + proxy + Wi-Fi)
       └─ axgui             xinit :0 → PyQt5 full-screen UI on tty1/HDMI
 ```
@@ -28,6 +29,7 @@ distribution unit is masked by the installer.
 | `axpanel` | 80 | LAN + uplink | password / token | the only user-facing HTTP surface |
 | `axplay` (airxplay2) | 8090 | loopback | none | shairport-sync supervision, metadata, D-Bus volume |
 | `vpnexit-web` | 8088 | all | `X-Auth-Token` | IKEv2 connect/disconnect, feed, selftest |
+| `axtunnel` | 8086 | loopback | none | manual IKEv2 / WireGuard / AmneziaWG / VLESS / OpenVPN / L2TP / SSTP profiles, routing, selftest |
 | `axnetd` | 8079 | loopback | none | uplink, bridge, AP, NAT, clients |
 
 `axpanel` is the only port reachable from the LAN. nftables drops `8079`, `8088`
@@ -69,6 +71,8 @@ Details and the exact ruleset: [NETWORK.md](NETWORK.md).
 | `/etc/airxpi/airxpi.json` | axnetd | appliance configuration (WAN mode, LAN, Wi-Fi, device) |
 | `/etc/airxpi/panel.json` | axpanel | password hash, session secret, API token, language |
 | `/etc/vpnexit/config.json` | vpnexit | feed URL, token, `lan_iface=br0`, routing knobs |
+| `/etc/airxpi/tunnels.json` | axtunnel | personal profiles + secrets (0600), mark/table |
+| `/var/lib/airxpi/tunnel-state.json` | axtunnel | last profile, tunnel device, exit address |
 | `/etc/hostapd/hostapd.conf` | axnetd | generated AP config (mode 0600, holds the PSK) |
 | `/etc/dnsmasq.d/airxpi.conf` | axnetd | DHCP/DNS for `br0` |
 | `/etc/avahi/avahi-daemon.conf` | axnetd | advertisement scope (br0 + uplink) |
@@ -89,6 +93,9 @@ Details and the exact ruleset: [NETWORK.md](NETWORK.md).
 * **Mark-based VPN routing.** The tunnel does not replace the default route; only
   LAN-originated, marked packets take table 417. The box keeps its own uplink for
   updates and the AirPlay control channel.
+* **Two VPN engines, one active.** `vpnexit` (feed) and `axtunnel` (personal
+  profiles) use different marks/tables and disconnect each other on connect, so
+  a half-written rule set cannot swallow the LAN.
 * **No IPv6.** The feed is IKEv2/IPv4; leaving IPv6 on the LAN would leak around it.
 * **Standard library Python.** Only the GUI needs a dependency (PyQt5), which keeps
   the appliance resilient to broken package upgrades.

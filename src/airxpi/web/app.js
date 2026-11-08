@@ -12,6 +12,11 @@ const I18N = {
     "common.save": "Save",
     "common.apply": "Apply",
     "common.refresh": "Refresh",
+    "common.cancel": "Cancel",
+    "common.delete": "Delete",
+    "common.connect": "Connect",
+    "common.disconnect": "Disconnect",
+    "common.edit": "Edit",
     "chip.airplay": "AirPlay",
     "tab.dashboard": "Dashboard",
     "tab.airplay": "AirPlay",
@@ -54,6 +59,24 @@ const I18N = {
     "vpn.share": "Share VPN with LAN clients",
     "vpn.block6": "Block IPv6 on the LAN",
     "vpn.reconnect": "Auto reconnect",
+    "pf.title": "My VPN profiles",
+    "pf.hint": "Bring your own server: IKEv2, WireGuard, AmneziaWG, VLESS + REALITY, OpenVPN, L2TP/IPsec or SSTP. The tunnel is shared with every client on this access point.",
+    "pf.new": "New profile",
+    "pf.empty": "No personal profile yet.",
+    "pf.name": "Profile name",
+    "pf.protocol": "Protocol",
+    "pf.upload": "Config file or text (optional)",
+    "pf.upload_hint": "Paste a wg-quick .conf or an .ovpn file. Other protocols use the fields above.",
+    "pf.saved": "Profile saved",
+    "pf.confirm_delete": "Delete this profile?",
+    "pf.stored": "stored",
+    "pf.missing": "not available on this box",
+    "pf.connecting": "Connecting the profile…",
+    "wifi.diag": "Access point troubleshooting",
+    "wifi.check": "Run check",
+    "wifi.restart_ap": "Restart access point",
+    "wifi.diag_hint": "If a phone cannot join, this shows the hostapd config test, the regulatory domain, rfkill and the last hostapd messages.",
+    "wifi.applying": "applying…",
     "wifi.ap": "Wi-Fi access point",
     "wifi.ssid": "Network name (SSID)",
     "wifi.psk": "Password (8-63 chars)",
@@ -122,6 +145,11 @@ const I18N = {
     "common.save": "ذخیره",
     "common.apply": "اعمال",
     "common.refresh": "به‌روزرسانی",
+    "common.cancel": "انصراف",
+    "common.delete": "حذف",
+    "common.connect": "اتصال",
+    "common.disconnect": "قطع",
+    "common.edit": "ویرایش",
     "chip.airplay": "AirPlay",
     "tab.dashboard": "داشبورد",
     "tab.airplay": "AirPlay",
@@ -164,6 +192,24 @@ const I18N = {
     "vpn.share": "اشتراک VPN با کاربران شبکه",
     "vpn.block6": "بستن IPv6 در شبکه محلی",
     "vpn.reconnect": "اتصال مجدد خودکار",
+    "pf.title": "پروفایل‌های شخصی من",
+    "pf.hint": "سرور خودتان را وصل کنید: IKEv2، WireGuard، AmneziaWG، VLESS + REALITY، OpenVPN، L2TP/IPsec یا SSTP. تونل برای همه کاربران این نقطه دسترسی به اشتراک گذاشته می‌شود.",
+    "pf.new": "پروفایل جدید",
+    "pf.empty": "هنوز پروفایل شخصی ساخته نشده است.",
+    "pf.name": "نام پروفایل",
+    "pf.protocol": "پروتکل",
+    "pf.upload": "فایل یا متن تنظیمات (اختیاری)",
+    "pf.upload_hint": "فایل ‎.conf‎ وای‌گارد یا ‎.ovpn‎ را اینجا بچسبانید. بقیه پروتکل‌ها از فیلدهای بالا استفاده می‌کنند.",
+    "pf.saved": "پروفایل ذخیره شد",
+    "pf.confirm_delete": "این پروفایل حذف شود؟",
+    "pf.stored": "ذخیره شده",
+    "pf.missing": "روی این دستگاه نصب نیست",
+    "pf.connecting": "در حال اتصال پروفایل…",
+    "wifi.diag": "عیب‌یابی نقطه دسترسی",
+    "wifi.check": "اجرای بررسی",
+    "wifi.restart_ap": "راه‌اندازی مجدد نقطه دسترسی",
+    "wifi.diag_hint": "اگر گوشی وصل نمی‌شود، اینجا نتیجه تست تنظیمات hostapd، محدوده فرکانسی، rfkill و آخرین پیام‌های hostapd را می‌بینید.",
+    "wifi.applying": "در حال اعمال…",
     "wifi.ap": "نقطه دسترسی وای‌فای",
     "wifi.ssid": "نام شبکه (SSID)",
     "wifi.psk": "گذرواژه (۸ تا ۶۳ نویسه)",
@@ -227,6 +273,79 @@ const I18N = {
 const CHANNELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 const COUNTRIES = ["", "IR", "TJ", "AF", "AE", "DE", "GB", "US", "TR", "RU", "IN", "PK", "SA", "QA", "FR", "NL", "SE", "CA", "AU", "JP", "SG"];
 
+/* [key, english label, persian label, placeholder, is secret] */
+const PF_FIELDS = {
+  ikev2: [
+    ["server", "Server", "سرور", "vpn.example.com"],
+    ["username", "User name", "نام کاربری", "user"],
+    ["password", "Password", "گذرواژه", "", true],
+    ["psk", "Pre-shared key (PSK only)", "کلید مشترک (فقط PSK)", "optional", true],
+    ["local_id", "Local ID", "شناسه محلی", "defaults to the user name"],
+    ["remote_id", "Remote ID", "شناسه سرور", "defaults to the server"],
+    ["ca", "CA certificate (PEM)", "گواهی CA", "-----BEGIN CERTIFICATE-----"],
+  ],
+  wireguard: [
+    ["private_key", "Private key", "کلید خصوصی", "base64", true],
+    ["address", "Interface address", "آدرس اینترفیس", "10.66.66.2/32"],
+    ["peer_public_key", "Peer public key", "کلید عمومی سرور", "base64"],
+    ["preshared_key", "Preshared key", "کلید مشترک", "optional", true],
+    ["endpoint", "Endpoint", "اندپوینت", "host:51820"],
+    ["allowed_ips", "Allowed IPs", "آی‌پی‌های مجاز", "0.0.0.0/0"],
+    ["mtu", "MTU", "MTU", "1400"],
+  ],
+  amneziawg: [
+    ["private_key", "Private key", "کلید خصوصی", "base64", true],
+    ["address", "Interface address", "آدرس اینترفیس", "10.66.66.2/32"],
+    ["peer_public_key", "Peer public key", "کلید عمومی سرور", "base64"],
+    ["preshared_key", "Preshared key", "کلید مشترک", "optional", true],
+    ["endpoint", "Endpoint", "اندپوینت", "host:51820"],
+    ["allowed_ips", "Allowed IPs", "آی‌پی‌های مجاز", "0.0.0.0/0"],
+    ["jc", "Jc", "Jc", "3"],
+    ["jmin", "Jmin", "Jmin", "40"],
+    ["jmax", "Jmax", "Jmax", "70"],
+    ["s1", "S1", "S1", "0"],
+    ["s2", "S2", "S2", "0"],
+    ["h1", "H1", "H1", "1"],
+    ["h2", "H2", "H2", "2"],
+    ["h3", "H3", "H3", "3"],
+    ["h4", "H4", "H4", "4"],
+  ],
+  vless: [
+    ["server", "Server", "سرور", "vpn.example.com"],
+    ["port", "Port", "پورت", "443"],
+    ["uuid", "UUID", "UUID", "xxxxxxxx-xxxx-...", true],
+    ["public_key", "Reality public key", "کلید عمومی Reality", "base64"],
+    ["short_id", "Short ID", "شناسه کوتاه", "heX"],
+    ["sni", "SNI", "SNI", "www.example.com"],
+    ["flow", "Flow", "Flow", "xtls-rprx-vision"],
+    ["fingerprint", "uTLS fingerprint", "اثر انگشت uTLS", "chrome"],
+  ],
+  openvpn: [
+    ["endpoint", "Server", "سرور", "vpn.example.com"],
+    ["port", "Port", "پورت", "1194"],
+    ["proto", "Protocol", "پروتکل", "udp"],
+    ["username", "User name", "نام کاربری", "optional"],
+    ["password", "Password", "گذرواژه", "optional", true],
+  ],
+  l2tp: [
+    ["server", "Server", "سرور", "vpn.example.com"],
+    ["username", "User name", "نام کاربری", "user"],
+    ["password", "Password", "گذرواژه", "", true],
+    ["psk", "IPsec PSK", "کلید IPsec", "optional", true],
+  ],
+  sstp: [
+    ["server", "Server", "سرور", "vpn.example.com"],
+    ["port", "Port", "پورت", "443"],
+    ["username", "User name", "نام کاربری", "user"],
+    ["password", "Password", "گذرواژه", "", true],
+  ],
+};
+const PF_ORDER = ["ikev2", "wireguard", "amneziawg", "vless", "openvpn", "l2tp", "sstp"];
+const PF_LABELS = {
+  ikev2: "IKEv2 (manual)", wireguard: "WireGuard", amneziawg: "AmneziaWG",
+  vless: "VLESS + REALITY", openvpn: "OpenVPN", l2tp: "L2TP / IPsec", sstp: "SSTP",
+};
+
 const state = {
   lang: "en",
   st: null,
@@ -237,6 +356,10 @@ const state = {
   volumeTouched: 0,
   tab: "dashboard",
   vpnSettings: null,
+  profiles: [],
+  caps: {},
+  pfEdit: "",
+  pfProtocol: "",
 };
 
 const $ = (id) => document.getElementById(id);
@@ -349,7 +472,7 @@ function setTab(name) {
   state.tab = name;
   document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("active", el.dataset.tab === name));
   document.querySelectorAll(".panel-view").forEach((el) => el.classList.toggle("active", el.dataset.view === name));
-  if (name === "vpn") loadLocations(false);
+  if (name === "vpn") { loadLocations(false); loadProfiles(); }
   if (name === "system") loadSystem();
 }
 
@@ -368,7 +491,7 @@ async function refresh(full) {
     if (!st || st.ok === false) return;
     state.st = st;
     render(st);
-    if (full) { loadWifiForm(st); loadVpnSettings(); }
+    if (full) { loadWifiForm(st); loadVpnSettings(); loadProfiles(); }
   } catch (err) { /* keep the previous view */ }
 }
 
@@ -386,6 +509,7 @@ function chip(id, on, text, warn) {
 function render(st) {
   const airplay = st.airplay || {};
   const vpn = st.vpn || {};
+  const tunnel = (st.tunnel || {}).status || {};
   const net = st.net || {};
   const wan = net.wan || {};
   const wifi = net.wifi || {};
@@ -398,7 +522,9 @@ function render(st) {
 
   const playing = np.state === "playing";
   chip("chip-airplay", airplay.server && airplay.server.running, t("chip.airplay"));
-  chip("chip-vpn", vpn.state === "connected", vpn.state === "connected" ? "VPN" : (vpn.state || "VPN"), vpn.state === "connecting");
+  const vpnOn = vpn.state === "connected" || tunnel.state === "connected";
+  const vpnBusy = vpn.state === "connecting" || tunnel.state === "connecting";
+  chip("chip-vpn", vpnOn, vpnOn ? "VPN" : (tunnel.state || vpn.state || "VPN"), vpnBusy);
   chip("chip-wifi", wifi.running, t("tab.wifi"));
   chip("chip-wan", wan.up, wan.iface || "WAN");
 
@@ -423,10 +549,12 @@ function render(st) {
   }
 
   /* dashboard cards */
-  $("dash-vpn").textContent = vpn.state === "connected" ? (vpn.exit_ip || "connected") : (vpn.state || "off");
-  $("dash-vpn-sub").textContent = vpn.state === "connected"
-    ? `${vpn.key || ""} · ${vpn.server || ""}`
-    : (vpn.error || "traffic uses the uplink directly");
+  const activeExit = tunnel.state === "connected" ? tunnel : vpn;
+  $("dash-vpn").textContent = activeExit.state === "connected"
+    ? (activeExit.exit_ip || "connected") : (activeExit.state || "off");
+  $("dash-vpn-sub").textContent = activeExit.state === "connected"
+    ? [activeExit.label || activeExit.key, activeExit.server || activeExit.name].filter(Boolean).join(" · ")
+    : (activeExit.error || vpn.error || "traffic uses the uplink directly");
   $("dash-wan").textContent = wan.iface || "—";
   $("dash-wan-sub").textContent = wan.ip ? `${wan.kind || ""} · ${wan.ip}` : "no uplink";
   $("dash-wifi").textContent = wifi.running ? wifi.ssid : "off";
@@ -441,7 +569,13 @@ function render(st) {
     $("ap-name").value = cfg.name || "";
     $("ap-delay").value = cfg.latency_offset_ms || 0;
     $("ap-password").value = cfg.password || "";
-    $("ap-state").textContent = airplay.server && airplay.server.running ? `running (pid ${airplay.server.pid || "-"})` : "stopped";
+    const server = airplay.server || {};
+    $("ap-state").textContent = server.running
+      ? `running (pid ${server.pid || "-"})${server.nqptp ? " · AirPlay 2" : " · AirPlay 1 (nqptp down)"}`
+      : (server.last_error ? "stopped — see the log" : "stopped");
+    const receiverNote = [server.warning, server.last_error].filter(Boolean).join("\n");
+    $("ap-log").textContent = receiverNote || (server.version || "");
+    $("ap-log").classList.toggle("hidden", !(receiverNote || server.version));
     $("ap-hdmi").textContent = airplay.hdmi_sink ? (airplay.displays || []).join(", ") : "no HDMI sink";
     $("ap-devices").textContent = (airplay.devices || [])
       .map((d) => (d.hdmi ? `${d.label} (HDMI)` : d.label)).join(", ") || "—";
@@ -462,16 +596,27 @@ function render(st) {
   $("vpn-state").className = "pill " + (vpn.state === "connected" ? "ok" : (vpn.state === "connecting" ? "busy" : ""));
   $("vpn-exit").textContent = vpn.exit_ip || "no exit address";
   $("vpn-server").textContent = vpn.server || vpn.key || "—";
-  $("vpn-line").textContent = vpn.state === "connected"
-    ? `${vpn.key || ""} — ${vpn.exit_ip || ""}`
-    : "LAN clients use the uplink until a location is selected";
+  $("vpn-line").textContent = tunnel.state === "connected"
+    ? `${tunnel.label || tunnel.protocol} · ${tunnel.name || ""} — ${tunnel.exit_ip || ""}`
+    : (vpn.state === "connected"
+      ? `${vpn.key || ""} — ${vpn.exit_ip || ""}`
+      : "LAN clients use the uplink until a location or a profile is connected");
   const vpnError = $("vpn-error");
-  if (vpn.error) { vpnError.textContent = vpn.error; vpnError.classList.remove("hidden"); }
+  const vpnMessage = tunnel.error || vpn.error;
+  if (vpnMessage) { vpnError.textContent = vpnMessage; vpnError.classList.remove("hidden"); }
   else vpnError.classList.add("hidden");
   updateLocationSelection(vpn);
+  renderProfiles();
 
   /* wifi view */
-  $("wifi-state").textContent = wifi.running ? "active" : (wifi.enabled ? "starting" : "disabled");
+  const apply = net.apply || {};
+  $("wifi-state").textContent = apply.running
+    ? `${t("wifi.applying")} (${apply.step || ""})`
+    : (wifi.running ? "active" : (wifi.enabled ? "starting" : "disabled"));
+  if (!apply.running && apply.error) {
+    $("wifi-error").textContent = apply.error;
+    $("wifi-error").classList.remove("hidden");
+  }
   $("wifi-live-ssid").textContent = wifi.ssid || "—";
   $("wifi-live-channel").textContent = wifi.channel ? `ch ${wifi.channel}` : "—";
   $("wifi-live-clients").textContent = String(wifi.clients || 0);
@@ -587,12 +732,185 @@ async function loadVpnSettings() {
   } catch (err) { /* ignore */ }
 }
 
+/* --------------------------------------------------------- my VPN profiles */
+async function loadProfiles() {
+  try {
+    const data = await api("/api/tunnel/profiles");
+    if (!data.ok) return;
+    state.profiles = data.items || [];
+    state.caps = data.capabilities || {};
+    renderProfiles();
+    if (!$("pf-form").classList.contains("hidden")) pfCaps($("pf-protocol").value);
+  } catch (err) { /* the engine may still be starting */ }
+}
+
+function pfLabel(protocol) {
+  return PF_LABELS[protocol] || protocol;
+}
+
+function renderProfiles() {
+  const list = $("pf-list");
+  const items = state.profiles || [];
+  $("pf-empty").classList.toggle("hidden", items.length > 0);
+  if (!items.length) { list.innerHTML = ""; return; }
+  const active = (state.st && state.st.tunnel && state.st.tunnel.status) || {};
+  const activeId = active.state && active.state !== "idle" ? (active.profile || "") : "";
+  list.innerHTML = items.map((item) => {
+    const detail = [pfLabel(item.protocol), item.server || item.endpoint || ""].filter(Boolean).join(" · ");
+    const isActive = item.id === activeId;
+    return `<div class="pf${isActive ? " active" : ""}">
+      <div class="pf-main">
+        <strong>${esc(item.name)}</strong>
+        <span class="muted small">${esc(detail)}${item.conf_set ? " · file" : ""}</span>
+      </div>
+      <div class="pf-actions">
+        <button class="btn ghost small" data-pf-connect="${esc(item.id)}">${isActive ? t("common.disconnect") : t("common.connect")}</button>
+        <button class="btn ghost small" data-pf-edit="${esc(item.id)}">${t("common.edit")}</button>
+        <button class="btn danger small" data-pf-del="${esc(item.id)}">${t("common.delete")}</button>
+      </div>
+    </div>`;
+  }).join("");
+  list.querySelectorAll("[data-pf-connect]").forEach((el) =>
+    el.addEventListener("click", () => pfToggle(el.dataset.pfConnect)));
+  list.querySelectorAll("[data-pf-edit]").forEach((el) =>
+    el.addEventListener("click", () => pfOpen(el.dataset.pfEdit)));
+  list.querySelectorAll("[data-pf-del]").forEach((el) =>
+    el.addEventListener("click", () => pfDelete(el.dataset.pfDel)));
+}
+
+function pfFieldsRender(protocol, values) {
+  const rows = PF_FIELDS[protocol] || [];
+  $("pf-fields").innerHTML = rows.map(([key, en, fa, ph, secret]) => {
+    const label = state.lang === "fa" ? fa : en;
+    const stored = secret && values && values[key + "_set"]
+      ? ` <em class="muted small">(${t("pf.stored")})</em>` : "";
+    const value = (values && values[key]) || "";
+    return `<label class="field"><span>${esc(label)}${stored}</span>
+      <input data-key="${esc(key)}" type="${secret ? "password" : "text"}" autocomplete="new-password"
+        placeholder="${esc(ph || "")}" value="${esc(value)}"></label>`;
+  }).join("");
+}
+
+function pfCaps(protocol) {
+  const el = $("pf-caps");
+  const cap = (state.caps || {})[protocol] || {};
+  if (!cap || cap.ok) { el.textContent = ""; el.classList.add("hidden"); return; }
+  const missing = (cap.missing || []).join(", ");
+  el.textContent = `${pfLabel(protocol)}: ${missing || cap.note || t("pf.missing")}${missing && cap.note ? " — " + cap.note : ""}`;
+  el.classList.remove("hidden");
+}
+
+function pfReset(protocol) {
+  state.pfEdit = "";
+  state.pfProtocol = protocol || "ikev2";
+  $("pf-form").classList.remove("hidden");
+  $("pf-name").value = "";
+  $("pf-protocol").value = state.pfProtocol;
+  $("pf-conf").value = "";
+  $("pf-error").classList.add("hidden");
+  pfFieldsRender(state.pfProtocol, null);
+  pfCaps(state.pfProtocol);
+  $("pf-name").focus();
+}
+
+async function pfOpen(id) {
+  if (!id) { pfReset($("pf-protocol").value || "ikev2"); return; }
+  try {
+    const data = await api(`/api/tunnel/profile?id=${encodeURIComponent(id)}`);
+    if (!data.ok || !data.profile) { toast(data.error || t("msg.failed"), true); return; }
+    const profile = data.profile;
+    state.pfEdit = profile.id;
+    state.pfProtocol = profile.protocol;
+    $("pf-form").classList.remove("hidden");
+    $("pf-name").value = profile.name || "";
+    $("pf-protocol").value = profile.protocol;
+    $("pf-conf").value = profile.conf || "";
+    pfFieldsRender(profile.protocol, profile);
+    pfCaps(profile.protocol);
+    $("pf-error").classList.add("hidden");
+    $("pf-name").focus();
+  } catch (err) { toast(t("msg.failed"), true); }
+}
+
+async function pfToggle(id) {
+  const active = (state.st && state.st.tunnel && state.st.tunnel.status) || {};
+  if (active.profile === id && (active.state === "connected" || active.state === "connecting")) {
+    const res = await api("/api/tunnel/disconnect", {});
+    toast(res.ok ? t("msg.disconnected") : (res.error || t("msg.failed")), !res.ok);
+  } else {
+    toast(t("pf.connecting"));
+    const res = await api("/api/tunnel/connect", { id });
+    if (!res.ok) toast(res.error || t("msg.failed"), true);
+  }
+  setTimeout(() => refresh(false), 700);
+}
+
+async function pfDelete(id) {
+  if (!confirm(t("pf.confirm_delete"))) return;
+  const res = await api("/api/tunnel/profile/delete", { id });
+  toast(res.ok ? t("msg.saved") : (res.error || t("msg.failed")), !res.ok);
+  loadProfiles();
+}
+
+async function pfSubmit(event) {
+  event.preventDefault();
+  const body = {
+    protocol: $("pf-protocol").value,
+    name: $("pf-name").value.trim(),
+    conf: $("pf-conf").value.trim(),
+  };
+  if (state.pfEdit) body.id = state.pfEdit;
+  document.querySelectorAll("#pf-fields input[data-key]").forEach((input) => {
+    if (input.value.trim()) body[input.dataset.key] = input.value.trim();
+  });
+  const error = $("pf-error");
+  if (!body.name) {
+    error.textContent = t("pf.name");
+    error.classList.remove("hidden");
+    return;
+  }
+  const res = await api("/api/tunnel/profile", body);
+  if (!res.ok) {
+    error.textContent = res.error || t("msg.failed");
+    error.classList.remove("hidden");
+    return;
+  }
+  error.classList.add("hidden");
+  toast(t("pf.saved"));
+  $("pf-form").classList.add("hidden");
+  loadProfiles();
+}
+
+/* --------------------------------------------------------- AP diagnostics */
+async function loadApDiag() {
+  const data = await api("/api/net/diag");
+  if (!data.ok) { toast(data.error || t("msg.failed"), true); return; }
+  const d = data.diag || {};
+  const check = d.config_check || {};
+  const log = (d.journal || "").split("\n").slice(-14).join("\n");
+  const text = [
+    `hostapd -t: ${check.ok ? "OK" : "FAILED"}\n${check.output || ""}`,
+    `unit: ${d.unit || "—"}`,
+    `stations: ${(d.station_count || "0").trim()}`,
+    `wlan0:\n${d.wlan0 || "—"}`,
+    `regulatory:\n${d.regulatory || "—"}`,
+    `rfkill:\n${d.rfkill || "—"}`,
+    `bridge:\n${d.bridge || "—"}`,
+    `hostapd log:\n${log || "—"}`,
+  ].join("\n\n");
+  const out = $("wifi-diag-out");
+  out.textContent = text;
+  out.classList.remove("hidden");
+}
+
 /* ------------------------------------------------------------------ wifi */
 function fillSelects() {
   $("wifi-channel").innerHTML = CHANNELS.map((ch) =>
     `<option value="${ch}">${ch}</option>`).join("");
   $("wifi-country").innerHTML = COUNTRIES.map((code) =>
     `<option value="${code}">${code || "—"}</option>`).join("");
+  $("pf-protocol").innerHTML = PF_ORDER.map((proto) =>
+    `<option value="${proto}">${PF_LABELS[proto]}</option>`).join("");
 }
 
 function loadWifiForm(st) {
@@ -697,6 +1015,34 @@ function bind() {
     refresh(false);
   });
 
+  $("pf-new").addEventListener("click", () => pfReset($("pf-protocol").value || "ikev2"));
+  $("pf-reload").addEventListener("click", () => { loadProfiles(); loadLocations(false); });
+  $("pf-cancel").addEventListener("click", () => {
+    $("pf-form").classList.add("hidden");
+    $("pf-error").classList.add("hidden");
+    state.pfEdit = "";
+  });
+  $("pf-form").addEventListener("submit", pfSubmit);
+  $("pf-protocol").addEventListener("change", () => {
+    pfFieldsRender($("pf-protocol").value, null);
+    pfCaps($("pf-protocol").value);
+  });
+
+  $("wifi-diag-run").addEventListener("click", loadApDiag);
+  $("wifi-ap-restart").addEventListener("click", async () => {
+    toast(t("wifi.applying"));
+    const res = await api("/api/net/ap/restart", {});
+    if (res.ok) {
+      $("wifi-error").classList.add("hidden");
+      toast(t("msg.applied"));
+    } else {
+      $("wifi-error").textContent = res.error || t("msg.failed");
+      $("wifi-error").classList.remove("hidden");
+    }
+    loadApDiag();
+    refresh(true);
+  });
+
   $("vpn-refresh").addEventListener("click", () => loadLocations(true));
   $("vpn-disconnect").addEventListener("click", disconnectVpn);
   $("vpn-search").addEventListener("input", renderLocations);
@@ -718,6 +1064,9 @@ function bind() {
     event.preventDefault();
     const body = {
       ssid: $("wifi-ssid").value,
+      mode: $("wifi-mode") ? $("wifi-mode").value : "ap",
+      uplink_ssid: $("wifi-uplink-ssid") ? $("wifi-uplink-ssid").value : "",
+      uplink_psk: $("wifi-uplink-psk") ? $("wifi-uplink-psk").value : "",
       channel: Number($("wifi-channel").value),
       country: $("wifi-country").value,
       max_clients: Number($("wifi-max").value || 16),

@@ -29,6 +29,7 @@ DIAG_PATH = os.path.join(DATA, "diag.log")
 HOST_ASOUND = "/host/asound"
 SS_BIN = shutil.which("shairport-sync") or "/usr/local/bin/shairport-sync"
 PANEL_PORT = int(os.environ.get("PANEL_PORT", "8090"))
+NQPTP_SHM = "/dev/shm/nqptp"
 
 DEFAULTS = {
     "name": "Zima AirPlay",
@@ -53,6 +54,56 @@ def diag(msg):
             f.write(line)
     except Exception:
         pass
+
+
+def binary_version():
+    """First line of ``shairport-sync -V`` - shows the build features."""
+    try:
+        proc = subprocess.run([SS_BIN, "-V"], stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, timeout=12)
+        text = proc.stdout.decode("utf-8", "replace").strip()
+        return text.splitlines()[0].strip() if text else ""
+    except Exception as e:  # noqa: BLE001
+        return "unavailable (%r)" % (e,)
+
+
+def tail_file(path, lines=6):
+    try:
+        with open(path, "r", errors="replace") as handle:
+            return "\n".join(line.rstrip() for line in deque(handle, maxlen=lines))
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def nqptp_ready(seconds=2.0):
+    """nqptp must own UDP 319/320 and map its shared memory.
+
+    Without that mapping shairport-sync falls back to classic AirPlay - it still
+    answers, but never joins an AirPlay 2 group and a group playback attempt
+    simply drops.  nqptp also dies instantly when systemd withholds
+    CAP_NET_BIND_SERVICE, which is why the unit listed in the bug report looked
+    "active" for a fraction of a second and then vanished.
+    """
+    deadline = time.time() + seconds
+    while True:
+        if os.path.exists(NQPTP_SHM):
+            return True
+        if time.time() >= deadline:
+            return False
+        time.sleep(0.25)
+
+
+def ensure_nqptp():
+    if nqptp_ready(1.0):
+        return True, "ready"
+    subprocess.run(["systemctl", "reset-failed", "nqptp"], timeout=10)
+    subprocess.run(["systemctl", "start", "nqptp"], timeout=20)
+    if nqptp_ready(10.0):
+        return True, "started"
+    detail = subprocess.run(["systemctl", "status", "nqptp", "--no-pager", "-n", "5"],
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            timeout=10).stdout.decode("utf-8", "replace")
+    return False, " | ".join(line.strip() for line in detail.splitlines()[-4:] if line.strip())
 
 
 # --------------------------------------------------------------------------
@@ -767,6 +818,18 @@ def _esc(s):
 def write_config():
     snap = CFG.snapshot()
     dev = snap.get("device") or default_device()
+    devices = list_devices()
+    values = [d.get("value") for d in devices]
+    if dev and values and dev not in values:
+        # The saved PCM disappeared (different card order after a kernel or
+        # overlay change).  Falling back to HDMI is what makes sound come back
+        # instead of shairport-sync exiting with "device not found".
+        hdmi = [d for d in devices
+                if "hdmi" in ("%s %s" % (d.get("card_name", ""), d.get("pcm_name", ""))).lower()
+                or "vc4" in ("%s %s" % (d.get("card_name", ""), d.get("pcm_name", ""))).lower()]
+        fallback = (hdmi or devices)[0]["value"]
+        diag("device %s is gone, falling back to %s" % (dev, fallback))
+        dev = fallback
     if snap.get("device") != dev:
         CFG.update({"device": dev})
         snap = CFG.snapshot()
@@ -805,22 +868,17 @@ def write_config():
         "{",
         '\toutput_device = "%s";' % _esc(dev),
     ]
-    if snap.get("stable_44k", True):
-        # One fixed rate/format keeps the HDMI PCM at a single rate, so a
-        # session start or a group join never re-negotiates the HDMI link.
-        # 48000 is what the sink (TV) and every AirPlay 2 sender agree on;
-        # 44.1k input is resampled internally.
-        lines += [
-            "\toutput_rate = 48000;",
-            '\toutput_format = "S16_LE";',
-            "\toutput_channels = 2;",
-        ]
-    else:
-        lines += [
-            '\toutput_rate = "auto";',
-            '\toutput_format = "auto";',
-            '\toutput_channels = "auto";',
-        ]
+    # Never pin the rate/format.  Forcing 48 kHz / S16_LE makes the ALSA
+    # backend die with "An unknown format was encountered while choosing output
+    # bit depth" on sinks that only accept S32 (vc4hdmi) - and it happens as
+    # soon as a stream starts, which is why the sender dropped the receiver
+    # right after being selected.  "auto" follows whatever the stream and the
+    # HDMI sink agree on.
+    lines += [
+        '\toutput_rate = "auto";',
+        '\toutput_format = "auto";',
+        '\toutput_channels = "auto";',
+    ]
     lines += [
         '\tdisable_standby_mode = "auto";',
     ]
@@ -855,6 +913,9 @@ class Supervisor:
         self.wanted = True
         self._fails = 0
         self._reader_started = False
+        self.last_error = ""
+        self.warning = ""
+        self.version = ""
 
     def _ensure_pipe(self):
         os.makedirs(DATA, exist_ok=True)
@@ -907,6 +968,21 @@ class Supervisor:
                 return False, "already running"
             self._ensure_pipe()
             self.reap_strays()
+            if not os.path.exists(SS_BIN):
+                self.last_error = "shairport-sync is not installed at %s" % SS_BIN
+                diag("preflight: " + self.last_error)
+                return False, self.last_error
+            # the build flags decide whether AirPlay 2 exists at all; keep the
+            # answer instead of guessing from a silent receiver
+            self.version = binary_version()
+            if "airplay2" not in self.version.lower().replace(" ", ""):
+                self.warning = ("this build has no AirPlay 2 support (%s) - rebuild "
+                                "with --with-airplay-2" % self.version)
+                diag("preflight: " + self.warning)
+            ready, detail = ensure_nqptp()
+            if not ready:
+                self.warning = "nqptp is not running: %s" % detail
+                diag("preflight: " + self.warning)
             write_config()
             try:
                 if os.path.getsize(LOG_PATH) > 1_000_000:
@@ -934,6 +1010,18 @@ class Supervisor:
             self.started_at = time.time()
             self.wanted = True
             diag("shairport-sync started pid=%s" % self.proc.pid)
+            # A bad config or an unavailable ALSA PCM makes the process exit
+            # immediately; capture that instead of reporting "started" and
+            # leaving the panel with an empty /data/shairport.log mystery.
+            time.sleep(1.2)
+            if self.proc.poll() is not None:
+                code = self.proc.returncode
+                self.last_error = (tail_file(LOG_PATH) or
+                                   "shairport-sync exited with status %s" % code)
+                self.proc = None
+                diag("shairport-sync exited: %s" % self.last_error)
+                return False, self.last_error
+            self.last_error = ""
         apply_volume_async()
         return True, "started"
 
@@ -1286,6 +1374,10 @@ def build_state():
             "uptime": int(time.time() - SUP.started_at) if SUP.running() else 0,
             "volume_mode": VOL.mode,
             "volume_note": VOL.note,
+            "version": SUP.version,
+            "nqptp": os.path.exists(NQPTP_SHM),
+            "warning": SUP.warning,
+            "last_error": SUP.last_error,
         },
         "volume": {"app": CFG.get("volume"), "reported": vol},
         "metadata_state": meta_state,

@@ -179,6 +179,39 @@
     </div>
     <div class="card">
       <div class="row space wrap">
+        <div>
+          <h3 data-i18n="pf.title">My VPN profiles</h3>
+          <p class="muted small" data-i18n="pf.hint">Bring your own server: IKEv2, WireGuard, AmneziaWG, VLESS + REALITY, OpenVPN, L2TP/IPsec or SSTP. The tunnel is shared with every client on this access point.</p>
+        </div>
+        <div class="row">
+          <button class="btn ghost small" id="pf-reload" data-i18n="common.refresh">Refresh</button>
+          <button class="btn primary small" id="pf-new" data-i18n="pf.new">New profile</button>
+        </div>
+      </div>
+      <div class="pf-list" id="pf-list"></div>
+      <p class="muted small hidden" id="pf-empty" data-i18n="pf.empty">No personal profile yet.</p>
+      <form class="pf-form hidden" id="pf-form">
+        <div class="grid two">
+          <label class="field"><span data-i18n="pf.name">Profile name</span>
+            <input type="text" id="pf-name" maxlength="48" autocomplete="off" required></label>
+          <label class="field"><span data-i18n="pf.protocol">Protocol</span>
+            <select id="pf-protocol"></select></label>
+        </div>
+        <p class="hint" id="pf-caps"></p>
+        <div class="grid two" id="pf-fields"></div>
+        <label class="field"><span data-i18n="pf.upload">Config file or text (optional)</span>
+          <textarea id="pf-conf" rows="4" spellcheck="false"
+            placeholder="[Interface] / client ... / {&quot;outbounds&quot;: [...]}"></textarea></label>
+        <p class="hint" data-i18n="pf.upload_hint">Paste a wg-quick .conf or an .ovpn file. Other protocols use the fields above.</p>
+        <div class="row">
+          <button class="btn primary" type="submit" data-i18n="common.save">Save</button>
+          <button class="btn ghost" type="button" id="pf-cancel" data-i18n="common.cancel">Cancel</button>
+        </div>
+        <p class="error hidden" id="pf-error"></p>
+      </form>
+    </div>
+    <div class="card">
+      <div class="row space wrap">
         <h3 data-i18n="vpn.locations">Locations</h3>
         <input type="search" id="vpn-search" class="search" placeholder="Search…">
       </div>
@@ -212,6 +245,16 @@
           <select id="wifi-channel"></select></label>
         <label class="field"><span data-i18n="wifi.country">Country (regulatory)</span>
           <select id="wifi-country"></select></label>
+        <label class="field"><span data-i18n="wifi.mode">Mode</span>
+          <select id="wifi-mode">
+            <option value="ap" data-i18n="wifi.mode.ap">Access point (share the uplink)</option>
+            <option value="bridge" data-i18n="wifi.mode.bridge">Wi-Fi bridge (join a network, transparent LAN)</option>
+            <option value="extender" data-i18n="wifi.mode.extender">Extender (join a network and rebroadcast)</option>
+          </select></label>
+        <label class="field"><span data-i18n="wifi.uplink_ssid">Upstream network (bridge/extender)</span>
+          <input type="text" id="wifi-uplink-ssid" maxlength="32" autocomplete="off"></label>
+        <label class="field"><span data-i18n="wifi.uplink_psk">Upstream password</span>
+          <input type="text" id="wifi-uplink-psk" maxlength="63" autocomplete="off"></label>
         <label class="field"><span data-i18n="wifi.max">Max clients</span>
           <input type="number" id="wifi-max" min="1" max="64"></label>
         <label class="field inline"><span data-i18n="wifi.hidden">Hidden network</span>
@@ -243,6 +286,17 @@
           <dt data-i18n="wifi.ethernet">USB Ethernet (eth1)</dt><dd id="lan-eth">—</dd>
         </dl>
       </div>
+    </div>
+    <div class="card">
+      <div class="row space wrap">
+        <h3 data-i18n="wifi.diag">Access point troubleshooting</h3>
+        <div class="row">
+          <button class="btn ghost small" id="wifi-diag-run" data-i18n="wifi.check">Run check</button>
+          <button class="btn small" id="wifi-ap-restart" data-i18n="wifi.restart_ap">Restart access point</button>
+        </div>
+      </div>
+      <p class="hint" data-i18n="wifi.diag_hint">If a phone cannot join, this shows the hostapd config test, the regulatory domain, rfkill and the last hostapd messages.</p>
+      <pre class="log hidden" id="wifi-diag-out"></pre>
     </div>
   </section>
 

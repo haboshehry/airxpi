@@ -15,7 +15,7 @@ PREFIX=/opt/airxpi
 STATE=/var/lib/airxpi
 CONFDIR=/etc/airxpi
 MARKER="$CONFDIR/.installed"
-SHAIRPORT_VERSION="${SHAIRPORT_VERSION:-5.6}"
+SHAIRPORT_VERSION="${SHAIRPORT_VERSION:-5.6.2}"
 
 SKIP_BUILD=0
 IMAGE_MODE=0
@@ -34,7 +34,8 @@ BASE_PKGS="python3 python3-pyqt5 alsa-utils avahi-daemon avahi-utils libnss-mdns
  xserver-xorg xserver-xorg-legacy xserver-xorg-video-fbdev xserver-xorg-input-libinput
  xinit x11-xserver-utils
  strongswan strongswan-swanctl libcharon-extra-plugins libstrongswan-extra-plugins
- plymouth plymouth-themes librsvg2-bin cec-utils openssh-server"
+ plymouth plymouth-themes librsvg2-bin cec-utils openssh-server
+ wireguard-tools openvpn xl2tpd sstp-client ppp kmod"
 
 BUILD_PKGS="git build-essential autoconf automake libtool pkg-config
  libasound2-dev libavahi-client-dev libssl-dev libsoxr-dev libplist-dev
@@ -119,9 +120,15 @@ build_shairport() {
         || fetch_source https://github.com/mikebrady/shairport-sync/archive/refs/heads/master.tar.gz "$tmp/ss"
     cd "$tmp/ss"
     autoreconf -fi >/dev/null 2>&1
+    # --with-ffmpeg is what gives AirPlay 2 its 48 kHz / multi-channel decode
+    # path; --with-pipe is what makes the metadata pipe exist at all.  Without
+    # them shairport-sync either refuses `output_rate = 48000` or exits because
+    # `pipe_name` is an unknown setting, which is the "receiver does not run"
+    # report this build fixes.
     ./configure --sysconfdir=/etc \
         --with-alsa --with-avahi --with-ssl=openssl --with-soxr \
-        --with-metadata --with-dbus-interface --with-airplay-2 >/dev/null
+        --with-metadata --with-pipe --with-dbus-interface \
+        --with-ffmpeg --with-airplay-2 >/dev/null
     make -j"$(nproc)" >/dev/null
     make install >/dev/null
     cd - >/dev/null
@@ -129,7 +136,63 @@ build_shairport() {
     echo "    $(shairport-sync -V 2>/dev/null | head -n1)"
 }
 
+install_singbox() {
+    # VLESS + REALITY runs on sing-box, which Debian does not package.  The
+    # release .deb is self-contained; when the download is unavailable the
+    # panel simply reports the protocol as "not installed" instead of failing.
+    command -v sing-box >/dev/null 2>&1 && return 0
+    say "installing sing-box (VLESS + REALITY)"
+    case "$(uname -m)" in
+        aarch64|arm64) arch=arm64 ;;
+        armv7l|armv6l) arch=armv7 ;;
+        x86_64|amd64) arch=amd64 ;;
+        *) warn "no sing-box build for $(uname -m)"; return 0 ;;
+    esac
+    tmp=$(mktemp -d)
+    if ! curl -fsSL --max-time 40 -o "$tmp/release.json" \
+            https://api.github.com/repos/SagerNet/sing-box/releases/latest; then
+        warn "sing-box: GitHub is not reachable, skipping"
+        rm -rf "$tmp"
+        return 0
+    fi
+    url=$(python3 - "$tmp/release.json" "$arch" <<'PY'
+import json
+import sys
+data = json.load(open(sys.argv[1]))
+arch = sys.argv[2]
+# upstream uses underscores (sing-box_1.11.0_linux_arm64.deb); older builds
+# used dashes.  Accept both, and prefer the glibc linked build.
+wanted = ("linux-%s.deb" % arch, "linux_%s.deb" % arch)
+picked = ""
+fallback = ""
+for asset in data.get("assets", []):
+    name = asset.get("name", "")
+    if not name.endswith(wanted):
+        continue
+    if "glibc" in name or "gnu" in name:
+        picked = asset["browser_download_url"]
+        break
+    if not fallback and "musl" not in name:
+        fallback = asset["browser_download_url"]
+print(picked or fallback)
+PY
+)
+    if [ -z "$url" ]; then
+        warn "sing-box: no .deb for $arch"
+        rm -rf "$tmp"
+        return 0
+    fi
+    if curl -fsSL --max-time 180 -o "$tmp/sing-box.deb" "$url"; then
+        dpkg -i "$tmp/sing-box.deb" >/dev/null 2>&1 || apt-get -f install -y -qq >/dev/null 2>&1 || true
+        command -v sing-box >/dev/null 2>&1 && echo "    $(sing-box version 2>/dev/null | head -n1)"
+    else
+        warn "sing-box: download failed"
+    fi
+    rm -rf "$tmp"
+}
+
 if [ "$SKIP_BUILD" = "0" ]; then
+    install_singbox || warn "sing-box not installed - VLESS profiles will be unavailable"
     command -v nqptp >/dev/null 2>&1 || build_nqptp
     if ! airplay2_ready; then
         if command -v shairport-sync >/dev/null 2>&1; then
@@ -150,8 +213,8 @@ fi
 # --------------------------------------------------------------------------
 say "installing files"
 install -d "$PREFIX/lib" "$PREFIX/bin" "$PREFIX/web" "$PREFIX/airplay2/static" \
-    "$PREFIX/vpnexit/web" "$STATE/airplay2" "$STATE/run" "$CONFDIR" /var/log/airxpi \
-    /usr/local/sbin /etc/hostapd /etc/dnsmasq.d
+    "$PREFIX/vpnexit/web" "$STATE/airplay2" "$STATE/run" "$CONFDIR" "$CONFDIR/tunnels" \
+    /var/log/airxpi /usr/local/sbin /etc/hostapd /etc/dnsmasq.d
 
 rm -rf "$PREFIX/lib/airxpi"
 cp -a "$SRC/src/airxpi" "$PREFIX/lib/airxpi"
@@ -190,9 +253,10 @@ install -m 0644 "$SRC/systemd/axp-splash-quit.service" /etc/systemd/system/axp-s
 install -m 0644 "$SRC/systemd/axp-splash-quit.timer" /etc/systemd/system/axp-splash-quit.timer
 install -m 0644 "$SRC/systemd/vpnexit-web.service" /etc/systemd/system/vpnexit-web.service
 install -m 0644 "$SRC/systemd/vpnexit-supervisor.service" /etc/systemd/system/vpnexit-supervisor.service
-if [ ! -f /lib/systemd/system/nqptp.service ] && [ ! -f /etc/systemd/system/nqptp.service ]; then
-    install -m 0644 "$SRC/systemd/nqptp.service" /etc/systemd/system/nqptp.service
-fi
+install -m 0644 "$SRC/systemd/axtunnel.service" /etc/systemd/system/axtunnel.service
+# ours wins over the unit `make install` ships: the upstream one has no
+# CAP_NET_BIND_SERVICE, so nqptp cannot bind PTP ports 319/320
+install -m 0644 "$SRC/systemd/nqptp.service" /etc/systemd/system/nqptp.service
 
 install -m 0644 "$SRC/config/udev-net.rules" /etc/udev/rules.d/90-airxpi-net.rules
 install -m 0644 "$SRC/config/modules-load.conf" /etc/modules-load.d/airxpi-usb.conf
@@ -346,7 +410,13 @@ PLYMOUTH
     # axp-splash-quit.timer is the safety net if the UI never comes up
     systemctl mask plymouth-quit.service plymouth-quit-wait.service >/dev/null 2>&1 || true
     enable_unit axp-splash-quit.timer
-    echo "    plymouth theme installed"
+    # The splash that is actually visible for most of the boot is the one from
+    # the initramfs.  Without this hook the theme stayed behind in the rootfs,
+    # so initramfs showed the default theme - no logo, no progress bar.
+    install -d /etc/initramfs-tools/hooks /etc/initramfs-tools/conf.d
+    install -m 0755 "$SRC/config/initramfs-hook-airxpi" /etc/initramfs-tools/hooks/airxpi-plymouth
+    echo "FRAMEBUFFER=y" > /etc/initramfs-tools/conf.d/airxpi-framebuffer.conf
+    echo "    plymouth theme installed (initramfs hook added)"
 fi
 
 CMDLINE=/boot/firmware/cmdline.txt
@@ -393,12 +463,23 @@ enable_any() {
 enable_unit dhcpcd.service
 enable_unit avahi-daemon.service
 for unit in axnet.service axpanel.service axplay.service axgui.service axcec.service \
-            vpnexit-web.service vpnexit-supervisor.service; do
+            axtunnel.service vpnexit-web.service vpnexit-supervisor.service; do
     enable_unit "$unit"
 done
 systemctl set-default multi-user.target >/dev/null 2>&1 || ln -sf /lib/systemd/system/multi-user.target /etc/systemd/system/default.target
 enable_unit nqptp.service
-enable_any strongswan-starter.service strongswan-swanctl.service
+# swanctl is the backend both vpnexit and axtunnel talk to.  The legacy
+# Debian's strongswan-swanctl package ships the swanctl CLI but no unit file:
+# strongswan-starter is what launches charon, and charon loads the vici plugin
+# that swanctl talks to.  Disabling starter left every IKEv2 profile without a
+# backend, so starter is the one to enable.
+enable_unit strongswan-starter.service
+install -d /etc/swanctl/conf.d
+if [ -f /etc/swanctl/swanctl.conf ]; then
+    grep -q 'conf\.d' /etc/swanctl/swanctl.conf || printf '\ninclude conf.d/*.conf\n' >> /etc/swanctl/swanctl.conf
+else
+    printf 'include conf.d/*.conf\n' > /etc/swanctl/swanctl.conf
+fi
 
 if [ "$IMAGE_MODE" = "0" ]; then
     systemctl daemon-reload
@@ -408,6 +489,7 @@ if [ "$IMAGE_MODE" = "0" ]; then
     systemctl restart axnet.service >/dev/null 2>&1 || true
     sleep 3
     systemctl restart axplay.service >/dev/null 2>&1 || true
+    systemctl restart axtunnel.service >/dev/null 2>&1 || true
     systemctl restart vpnexit-web.service vpnexit-supervisor.service >/dev/null 2>&1 || true
     systemctl restart axpanel.service >/dev/null 2>&1 || true
     systemctl restart axgui.service >/dev/null 2>&1 || true

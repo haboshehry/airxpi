@@ -264,11 +264,13 @@ class Keyboard(QDialog):
 class Backdrop(QWidget):
     """Dark gradient with a blurred, dimmed copy of the current cover art."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, on_first_paint=None):
         super().__init__(parent)
         self._source = None
         self._cache = None
         self._cache_size = QSize()
+        self._on_first_paint = on_first_paint
+        self._painted = False
 
     def set_art(self, pixmap):
         self._source = pixmap
@@ -295,6 +297,13 @@ class Backdrop(QWidget):
             painter.setOpacity(1.0)
             painter.fillRect(rect, QColor(6, 10, 14, 150))
         painter.end()
+        # The splash must stay up until this exact moment: the old 1.5 s timer
+        # fired before X had composited the first frame, which is the black
+        # screen between the progress bar and the panel.
+        if not self._painted:
+            self._painted = True
+            if self._on_first_paint:
+                self._on_first_paint()
 
 
 def card(widget, object_name="Card"):
@@ -323,10 +332,18 @@ class AirXPiWindow(QWidget):
         self._tab = "airplay"
         self.kb = None
         self._unmuted = 40
+        self._splash_done = False
+        screen = QApplication.primaryScreen()
+        height = screen.size().height() if screen else 1080
+        # One layout, two panels: 720p keeps the design readable, 1080p is the
+        # reference size.  Everything lives in a centred "stage" so a wide TV
+        # does not stretch the artwork across the whole wall.
+        self.scale = max(0.84, min(1.10, height / 1080.0))
+        self.stage_width = int(1180 * self.scale)
 
         self.setWindowTitle("AirXPi")
         self.setObjectName("Root")
-        self.backdrop = Backdrop(self)
+        self.backdrop = Backdrop(self, on_first_paint=self._quit_splash)
         self.backdrop.lower()
 
         self._build()
@@ -353,9 +370,24 @@ class AirXPiWindow(QWidget):
 
     # -- layout ---------------------------------------------------------
     def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(26, 20, 26, 18)
+        root = QVBoxLayout()
+        root.setContentsMargins(28, 24, 28, 22)
         root.setSpacing(14)
+
+        # Centred stage: on 720p it uses the full width, on 1080p it stays a
+        # readable column instead of stretching edge to edge.
+        self.stage = QWidget(self)
+        self.stage.setObjectName("Stage")
+        self.stage.setAttribute(Qt.WA_StyledBackground, True)
+        self.stage.setMaximumWidth(self.stage_width)
+        self.stage.setLayout(root)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        outer.addStretch(1)
+        outer.addWidget(self.stage, 0, Qt.AlignHCenter)
+        outer.addStretch(1)
 
         header = QHBoxLayout()
         self.brand = QLabel("AirXPi")
@@ -676,6 +708,11 @@ class AirXPiWindow(QWidget):
             }
             QPushButton#Tab:checked { background: rgba(24, 35, 47, 0.95); border-color: #2a3a4a; color: #ffffff; }
             QPushButton#Ghost { background: transparent; border: 1px solid #2a3a4a; }
+            QWidget#Stage {
+                background: rgba(9, 15, 21, 0.62);
+                border: 1px solid rgba(52, 74, 92, 0.65);
+                border-radius: 30px;
+            }
             QStackedWidget#Stack {
                 background: rgba(14, 21, 29, 0.82); border: 1px solid #24333f;
                 border-radius: 18px; padding: 12px;
@@ -738,6 +775,9 @@ class AirXPiWindow(QWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.backdrop.setGeometry(self.rect())
+        if getattr(self, "stage", None):
+            # keep a margin on 720p panels, clamp the column on 1080p ones
+            self.stage.setMaximumWidth(max(640, min(self.width() - 56, self.stage_width)))
         if self.art:
             self.apply_art_pixmap()
         self.position_progress()
@@ -959,12 +999,23 @@ class AirXPiWindow(QWidget):
     # -- boot splash ----------------------------------------------------
     def showEvent(self, event):
         super().showEvent(event)
-        if not getattr(self, "_splash_done", False):
-            self._splash_done = True
-            QTimer.singleShot(1500, self._quit_splash)
+        # There is no window manager on this box, so _NET_WM_STATE_FULLSCREEN
+        # is never honoured and Qt falls back to the layout's size hint - the
+        # window then sits in the top-left corner of a 1080p panel.  Set the
+        # geometry from the real screen ourselves.
+        screen = QApplication.primaryScreen()
+        if screen:
+            self.setGeometry(screen.geometry())
+        # The backdrop calls _quit_splash() from its first paint.  This timer is
+        # only a safety net so a broken backdrop cannot leave the splash up
+        # until axp-splash-quit.timer fires.
+        QTimer.singleShot(4000, self._quit_splash)
 
     def _quit_splash(self):
         """Hand the screen over from plymouth once the first frame is painted."""
+        if self._splash_done:
+            return
+        self._splash_done = True
         if shutil.which("plymouth"):
             try:
                 subprocess.run(["plymouth", "quit"], check=False, timeout=10)

@@ -254,6 +254,28 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent);
 .loc .sub { font-size: 11.5px; color: var(--muted); }
 .loc .premium { color: var(--warn); font-size: 11px; }
 
+/* ------------------------------------------------------- personal profiles */
+.pf-list { display: grid; gap: 10px; margin-top: 14px; }
+.pf {
+  display: flex; align-items: center; gap: 12px; justify-content: space-between;
+  flex-wrap: wrap; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--bg-soft);
+}
+.pf.active { border-color: #2e6b53; background: #10241d; }
+.pf-main { display: grid; gap: 3px; min-width: 0; }
+.pf-main strong { font-size: 15px; }
+.pf-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.pf-form {
+  margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line);
+  display: grid; gap: 12px;
+}
+.pf-form textarea {
+  width: 100%; min-height: 96px; resize: vertical;
+  background: var(--card-2); color: var(--text);
+  border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px;
+}
+
 .svc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
 .svc-list li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid #1a2530; }
 .svc-list li:last-child { border-bottom: 0; }
