@@ -801,6 +801,12 @@ def up_openvpn(profile):
             continue_from = write_profile_file(profile, "ca.crt", profile["ca"].strip() + "\n")
             lines.append("ca %s" % continue_from)
         text = "\n".join(lines) + "\n"
+    # A SoftEther export carries a bare "auth-user-pass": the daemon then waits
+    # for a terminal that does not exist and the connect hangs.
+    if profile.get("username") or profile.get("password"):
+        kept = [ln for ln in text.splitlines()
+                if ln.strip() != "auth-user-pass"]
+        text = "\n".join(kept) + "\n"
     path = write_profile_file(profile, "ovpn", text)
     if not which("openvpn"):
         raise TunnelError("openvpn is not installed")
@@ -819,7 +825,10 @@ def up_openvpn(profile):
            "--pull-filter", "ignore", "dhcp-option",
            "--pull-filter", "ignore", "block-outside-dns",
            "--pull-filter", "ignore", "register-dns",
-           "--ping", "10", "--ping-restart", "60", "--auth-nocache", "--verb", "3"]
+           "--ping", "10", "--ping-restart", "60", "--auth-nocache", "--verb", "3",
+           # Without this, small packets (ICMP) pass while every TCP stream
+           # stalls: the inner 1500-byte segment never fits the outer transport.
+           "--mssfix", "1360"]
     if auth_file:
         cmd += ["--auth-user-pass", auth_file]
     rc, out = run(cmd, timeout=40)
@@ -1500,6 +1509,18 @@ def connect(profile_id, verify=True):
                 time.sleep(2.0)
         else:
             test = {"ok": False, "detail": "not tested"}
+        if verify and not test.get("ok"):
+            # A tunnel that carries nothing must not stay the LAN default: the
+            # whole network would look "hung" until someone rebooted.
+            log("connect: verification failed (%s), removing the routing" % test.get("detail", ""))
+            routing_clear()
+            try:
+                adapter["down"](profile)
+            except Exception:  # noqa: BLE001
+                pass
+            state_patch(state="error", error=test.get("detail", ""), routing=False,
+                        exit_ip="", device="", local_ip="", checked_at=int(time.time()))
+            return {"ok": False, "error": test.get("detail", "tunnel did not pass traffic")}
         state_patch(state="connected", exit_ip=test.get("ip", "") or tunnel.get("exit_ip", ""),
                     error="" if test.get("ok") else test.get("detail", ""),
                     routing=routing["active"], checked_at=int(time.time()), attempts=0)
